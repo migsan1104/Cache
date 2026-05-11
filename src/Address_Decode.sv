@@ -11,14 +11,13 @@ module Address_Decode #(
     output logic [OFFSET_BITS-1:0] offset
 );
 
+    // Extract byte offset bits from address
     assign offset = addr[OFFSET_BITS-1:0];
 
-    assign index = addr[
-        OFFSET_BITS +: INDEX_BITS
-    ];
+    // Extract set/index bits from address
+    assign index = addr[OFFSET_BITS +: INDEX_BITS];
 
-    assign tag = addr[
-        ADDR_WIDTH-1 -: TAG_BITS
-    ];
+    // Extract upper tag bits from address
+    assign tag = addr[ADDR_WIDTH-1 -: TAG_BITS];
 
 endmodule
