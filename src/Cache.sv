@@ -1,13 +1,13 @@
 // ============================================================
-// Direct-mapped parameterized cache skeleton
-// Uses RAM.sv directly for data, tag, and flag arrays
+// Parameterized cache skeleton
+// Uses Address_Decode.sv and RAM.sv directly for arrays
 // ============================================================
 
 module Cache #(
     parameter int ADDR_WIDTH   = 32,
     parameter int DATA_WIDTH   = 32,
-    parameter int CACHE_SIZE   = 1024,
-    parameter int LINE_BYTES   = 4,
+    parameter int CACHE_BYTES  = 1024,
+    parameter int LINE_BYTES   = 16,
     parameter int ASSOC        = 1,
     parameter int READ_LATENCY = 1
 )(
@@ -40,20 +40,23 @@ module Cache #(
     input  logic [DATA_WIDTH-1:0] mem_rdata
 );
 
-    // Total number of cache lines in the entire cache
-    localparam int NUM_LINES = CACHE_SIZE / LINE_BYTES;
+    // ============================================================
+    // Cache geometry
+    // ============================================================
 
-    // Total number of cache sets
-    localparam int NUM_SETS = NUM_LINES / ASSOC;
+    localparam int WORD_BYTES      = DATA_WIDTH / 8;
+    localparam int WORDS_PER_LINE  = LINE_BYTES / WORD_BYTES;
+    localparam int NUM_LINES       = CACHE_BYTES / LINE_BYTES;
+    localparam int NUM_SETS        = NUM_LINES / ASSOC;
 
-    // Number of bits used for byte offset inside a cache line
-    localparam int OFFSET_BITS = $clog2(LINE_BYTES);
+    localparam int BYTE_OFFSET_W   = $clog2(WORD_BYTES);
+    localparam int WORD_OFFSET_W   = $clog2(WORDS_PER_LINE);
+    localparam int SET_INDEX_BITS  = (NUM_SETS <= 1) ? 0 : $clog2(NUM_SETS);
+    localparam int SET_INDEX_W     = (SET_INDEX_BITS == 0) ? 1 : SET_INDEX_BITS;
 
-    // Number of bits used to index into cache sets
-    localparam int INDEX_BITS = $clog2(NUM_SETS);
-
-    // Remaining upper address bits used for tag comparison
-    localparam int TAG_BITS = ADDR_WIDTH - INDEX_BITS - OFFSET_BITS;
+    localparam int LINE_OFFSET_W   = BYTE_OFFSET_W + WORD_OFFSET_W;
+    localparam int TAG_WIDTH       = ADDR_WIDTH - LINE_OFFSET_W - SET_INDEX_BITS;
+    localparam int LINE_ADDR_WIDTH = ADDR_WIDTH - LINE_OFFSET_W;
 
     // Flag bits: [0] valid, [1] dirty, [2] lock/reserved, [3] replacement/debug
     localparam int FLAG_BITS = 4;
@@ -62,32 +65,46 @@ module Cache #(
     // Address decode
     // ============================================================
 
-    logic [TAG_BITS-1:0]    addr_tag;
-    logic [INDEX_BITS-1:0]  addr_index;
-    logic [OFFSET_BITS-1:0] addr_offset;
+    logic [TAG_WIDTH-1:0]       addr_tag;
+    logic [SET_INDEX_W-1:0]     addr_index;
+    logic [WORD_OFFSET_W-1:0]   addr_word_offset;
+    logic [BYTE_OFFSET_W-1:0]   addr_byte_offset;
+    logic [LINE_ADDR_WIDTH-1:0] addr_line_addr;
 
-    assign addr_offset = cpu_addr[OFFSET_BITS-1:0];
-    assign addr_index  = cpu_addr[OFFSET_BITS +: INDEX_BITS];
-    assign addr_tag    = cpu_addr[ADDR_WIDTH-1 -: TAG_BITS];
+    Address_Decode #(
+        .ADDR_WIDTH (ADDR_WIDTH),
+        .DATA_WIDTH (DATA_WIDTH),
+        .CACHE_BYTES(CACHE_BYTES),
+        .LINE_BYTES (LINE_BYTES),
+        .ASSOC      (ASSOC)
+    ) ADDR_DECODE (
+        .addr       (cpu_addr),
+
+        .tag        (addr_tag),
+        .index      (addr_index),
+        .word_offset(addr_word_offset),
+        .byte_offset(addr_byte_offset),
+        .line_addr  (addr_line_addr)
+    );
 
     // ============================================================
     // Cache arrays
     // ============================================================
 
-    logic                  data_wen;
-    logic                  tag_wen;
-    logic                  flag_wen;
+    logic                    data_wen;
+    logic                    tag_wen;
+    logic                    flag_wen;
 
-    logic [INDEX_BITS-1:0] array_windex;
-    logic [INDEX_BITS-1:0] array_rindex;
+    logic [SET_INDEX_W-1:0]  array_windex;
+    logic [SET_INDEX_W-1:0]  array_rindex;
 
-    logic [DATA_WIDTH-1:0] data_wdata;
-    logic [TAG_BITS-1:0]   tag_wdata;
-    logic [FLAG_BITS-1:0]  flag_wdata;
+    logic [DATA_WIDTH-1:0]   data_wdata;
+    logic [TAG_WIDTH-1:0]    tag_wdata;
+    logic [FLAG_BITS-1:0]    flag_wdata;
 
-    logic [DATA_WIDTH-1:0] data_rdata;
-    logic [TAG_BITS-1:0]   tag_rdata;
-    logic [FLAG_BITS-1:0]  flag_rdata;
+    logic [DATA_WIDTH-1:0]   data_rdata;
+    logic [TAG_WIDTH-1:0]    tag_rdata;
+    logic [FLAG_BITS-1:0]    flag_rdata;
 
     assign array_rindex = addr_index;
 
@@ -107,7 +124,7 @@ module Cache #(
     );
 
     RAM #(
-        .D_WIDTH     (TAG_BITS),
+        .D_WIDTH     (TAG_WIDTH),
         .DEPTH       (NUM_SETS),
         .READ_LATENCY(READ_LATENCY)
     ) TAG_ARRAY (
@@ -137,10 +154,18 @@ module Cache #(
     );
 
     // ============================================================
-    // Basic hit logic
+    // Tag compare
     // ============================================================
 
-    assign cpu_hit = flag_rdata[0] && (tag_rdata == addr_tag);
+    Tag #(
+        .TAG_BITS(TAG_WIDTH)
+    ) TAG_COMPARE (
+        .req_tag   (addr_tag),
+        .stored_tag(tag_rdata),
+        .valid     (flag_rdata[0]),
+
+        .hit       (cpu_hit)
+    );
 
     // ============================================================
     // Temporary skeleton outputs
