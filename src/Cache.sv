@@ -1,6 +1,7 @@
 // ============================================================
-// Parameterized cache skeleton
-// Uses Address_Decode.sv and RAM.sv directly for arrays
+// Parameterized set-associative cache skeleton
+// One data/tag/flag array per way
+// Address format: [tag ID][set ID][word ID]
 // ============================================================
 
 module Cache #(
@@ -8,15 +9,10 @@ module Cache #(
     parameter int DATA_WIDTH   = 32,
     parameter int CACHE_BYTES  = 1024,
     parameter int LINE_BYTES   = 16,
-    parameter int ASSOC        = 1,
-    parameter int READ_LATENCY = 1
+    parameter int ASSOC        = 4,
 )(
     input  logic clk,
     input  logic rst,
-
-    // ============================================================
-    // CPU INTERFACE
-    // ============================================================
 
     input  logic                  cpu_valid,
     input  logic                  cpu_write,
@@ -27,10 +23,6 @@ module Cache #(
     output logic                  cpu_hit,
     output logic [DATA_WIDTH-1:0] cpu_rdata,
 
-    // ============================================================
-    // DOWNSTREAM MEMORY INTERFACE
-    // ============================================================
-
     output logic                  mem_valid,
     output logic                  mem_write,
     output logic [ADDR_WIDTH-1:0] mem_addr,
@@ -40,36 +32,31 @@ module Cache #(
     input  logic [DATA_WIDTH-1:0] mem_rdata
 );
 
-    // ============================================================
-    // Cache geometry
-    // ============================================================
-
     localparam int WORD_BYTES      = DATA_WIDTH / 8;
     localparam int WORDS_PER_LINE  = LINE_BYTES / WORD_BYTES;
+    localparam int LINE_WIDTH      = LINE_BYTES * 8;
     localparam int NUM_LINES       = CACHE_BYTES / LINE_BYTES;
     localparam int NUM_SETS        = NUM_LINES / ASSOC;
 
-    localparam int BYTE_OFFSET_W   = $clog2(WORD_BYTES);
     localparam int WORD_OFFSET_W   = $clog2(WORDS_PER_LINE);
     localparam int SET_INDEX_BITS  = (NUM_SETS <= 1) ? 0 : $clog2(NUM_SETS);
     localparam int SET_INDEX_W     = (SET_INDEX_BITS == 0) ? 1 : SET_INDEX_BITS;
 
-    localparam int LINE_OFFSET_W   = BYTE_OFFSET_W + WORD_OFFSET_W;
-    localparam int TAG_WIDTH       = ADDR_WIDTH - LINE_OFFSET_W - SET_INDEX_BITS;
-    localparam int LINE_ADDR_WIDTH = ADDR_WIDTH - LINE_OFFSET_W;
+    localparam int WORD_ADDR_W     = ADDR_WIDTH - $clog2(WORD_BYTES);
+    localparam int TAG_WIDTH       = WORD_ADDR_W - WORD_OFFSET_W - SET_INDEX_BITS;
+    localparam int LINE_ADDR_WIDTH = WORD_ADDR_W - WORD_OFFSET_W;
+
+    localparam int WAY_INDEX_W     = (ASSOC <= 1) ? 1 : $clog2(ASSOC);
 
     // Flag bits: [0] valid, [1] dirty, [2] lock/reserved, [3] replacement/debug
     localparam int FLAG_BITS = 4;
 
-    // ============================================================
-    // Address decode
-    // ============================================================
-
     logic [TAG_WIDTH-1:0]       addr_tag;
-    logic [SET_INDEX_W-1:0]     addr_index;
-    logic [WORD_OFFSET_W-1:0]   addr_word_offset;
-    logic [BYTE_OFFSET_W-1:0]   addr_byte_offset;
+    logic [SET_INDEX_W-1:0]     addr_set_id;
+    logic [WORD_OFFSET_W-1:0]   addr_word_id;
     logic [LINE_ADDR_WIDTH-1:0] addr_line_addr;
+
+    localparam int READ_LATENCY = 1;
 
     Address_Decode #(
         .ADDR_WIDTH (ADDR_WIDTH),
@@ -78,115 +65,126 @@ module Cache #(
         .LINE_BYTES (LINE_BYTES),
         .ASSOC      (ASSOC)
     ) ADDR_DECODE (
-        .addr       (cpu_addr),
-
-        .tag        (addr_tag),
-        .index      (addr_index),
-        .word_offset(addr_word_offset),
-        .byte_offset(addr_byte_offset),
-        .line_addr  (addr_line_addr)
+        .addr     (cpu_addr),
+        .tag      (addr_tag),
+        .set_id   (addr_set_id),
+        .word_id  (addr_word_id),
+        .line_addr(addr_line_addr)
     );
 
-    // ============================================================
-    // Cache arrays
-    // ============================================================
+    logic [ASSOC-1:0] data_wen;
+    logic [ASSOC-1:0] tag_wen;
+    logic [ASSOC-1:0] flag_wen;
 
-    logic                    data_wen;
-    logic                    tag_wen;
-    logic                    flag_wen;
+    logic [SET_INDEX_W-1:0] array_rindex;
+    logic [SET_INDEX_W-1:0] array_windex;
 
-    logic [SET_INDEX_W-1:0]  array_windex;
-    logic [SET_INDEX_W-1:0]  array_rindex;
+    logic [LINE_WIDTH-1:0] data_wline [ASSOC];
+    logic [TAG_WIDTH-1:0]  tag_wdata  [ASSOC];
+    logic [FLAG_BITS-1:0]  flag_wdata [ASSOC];
 
-    logic [DATA_WIDTH-1:0]   data_wdata;
-    logic [TAG_WIDTH-1:0]    tag_wdata;
-    logic [FLAG_BITS-1:0]    flag_wdata;
+    logic [LINE_WIDTH-1:0] data_rline [ASSOC];
+    logic [TAG_WIDTH-1:0]  tag_rdata  [ASSOC];
+    logic [FLAG_BITS-1:0]  flag_rdata [ASSOC];
 
-    logic [DATA_WIDTH-1:0]   data_rdata;
-    logic [TAG_WIDTH-1:0]    tag_rdata;
-    logic [FLAG_BITS-1:0]    flag_rdata;
+    logic [ASSOC-1:0]         way_hit;
+    logic [DATA_WIDTH-1:0]    way_word [ASSOC];
+    logic [WAY_INDEX_W-1:0]   hit_way;
+    logic [DATA_WIDTH-1:0]    selected_word;
 
-    assign array_rindex = addr_index;
+    assign array_rindex = addr_set_id;
+    assign array_windex = addr_set_id;
 
-    RAM #(
-        .D_WIDTH     (DATA_WIDTH),
-        .DEPTH       (NUM_SETS),
-        .READ_LATENCY(READ_LATENCY)
-    ) DATA_ARRAY (
-        .clk  (clk),
+    genvar way;
 
-        .wen  (data_wen),
-        .waddr(array_windex),
-        .wdata(data_wdata),
+    generate
+        for (way = 0; way < ASSOC; way++) begin : GEN_WAYS
 
-        .raddr(array_rindex),
-        .rdata(data_rdata)
-    );
+            RAM #(
+                .D_WIDTH     (LINE_WIDTH),
+                .DEPTH       (NUM_SETS),
+                .READ_LATENCY(READ_LATENCY)
+            ) DATA_ARRAY (
+                .clk  (clk),
+                .wen  (data_wen[way]),
+                .waddr(array_windex),
+                .wdata(data_wline[way]),
+                .raddr(array_rindex),
+                .rdata(data_rline[way])
+            );
 
-    RAM #(
-        .D_WIDTH     (TAG_WIDTH),
-        .DEPTH       (NUM_SETS),
-        .READ_LATENCY(READ_LATENCY)
-    ) TAG_ARRAY (
-        .clk  (clk),
+            RAM #(
+                .D_WIDTH     (TAG_WIDTH),
+                .DEPTH       (NUM_SETS),
+                .READ_LATENCY(READ_LATENCY)
+            ) TAG_ARRAY (
+                .clk  (clk),
+                .wen  (tag_wen[way]),
+                .waddr(array_windex),
+                .wdata(tag_wdata[way]),
+                .raddr(array_rindex),
+                .rdata(tag_rdata[way])
+            );
 
-        .wen  (tag_wen),
-        .waddr(array_windex),
-        .wdata(tag_wdata),
+            RAM #(
+                .D_WIDTH     (FLAG_BITS),
+                .DEPTH       (NUM_SETS),
+                .READ_LATENCY(READ_LATENCY)
+            ) FLAG_ARRAY (
+                .clk  (clk),
+                .wen  (flag_wen[way]),
+                .waddr(array_windex),
+                .wdata(flag_wdata[way]),
+                .raddr(array_rindex),
+                .rdata(flag_rdata[way])
+            );
 
-        .raddr(array_rindex),
-        .rdata(tag_rdata)
-    );
+            Tag #(
+                .TAG_BITS(TAG_WIDTH)
+            ) TAG_COMPARE (
+                .req_tag   (addr_tag),
+                .stored_tag(tag_rdata[way]),
+                .valid     (flag_rdata[way][0]),
+                .hit       (way_hit[way])
+            );
 
-    RAM #(
-        .D_WIDTH     (FLAG_BITS),
-        .DEPTH       (NUM_SETS),
-        .READ_LATENCY(READ_LATENCY)
-    ) FLAG_ARRAY (
-        .clk  (clk),
+            assign way_word[way] = data_rline[way][addr_word_id * DATA_WIDTH +: DATA_WIDTH];
 
-        .wen  (flag_wen),
-        .waddr(array_windex),
-        .wdata(flag_wdata),
+        end
+    endgenerate
 
-        .raddr(array_rindex),
-        .rdata(flag_rdata)
-    );
+    assign cpu_hit = |way_hit;
 
-    // ============================================================
-    // Tag compare
-    // ============================================================
+    always_comb begin
+        hit_way       = '0;
+        selected_word = '0;
 
-    Tag #(
-        .TAG_BITS(TAG_WIDTH)
-    ) TAG_COMPARE (
-        .req_tag   (addr_tag),
-        .stored_tag(tag_rdata),
-        .valid     (flag_rdata[0]),
-
-        .hit       (cpu_hit)
-    );
-
-    // ============================================================
-    // Temporary skeleton outputs
-    // Controller logic will replace this next
-    // ============================================================
+        for (int i = 0; i < ASSOC; i++) begin
+            if (way_hit[i]) begin
+                hit_way       = i[WAY_INDEX_W-1:0];
+                selected_word = way_word[i];
+            end
+        end
+    end
 
     assign cpu_ready = cpu_valid && cpu_hit;
-    assign cpu_rdata = data_rdata;
+    assign cpu_rdata = selected_word;
 
     assign mem_valid = 1'b0;
     assign mem_write = 1'b0;
     assign mem_addr  = '0;
     assign mem_wdata = '0;
 
-    assign data_wen  = 1'b0;
-    assign tag_wen   = 1'b0;
-    assign flag_wen  = 1'b0;
+    always_comb begin
+        data_wen  = '0;
+        tag_wen   = '0;
+        flag_wen  = '0;
 
-    assign array_windex = addr_index;
-    assign data_wdata   = cpu_wdata;
-    assign tag_wdata    = addr_tag;
-    assign flag_wdata   = 4'b0001;
+        for (int i = 0; i < ASSOC; i++) begin
+            data_wline[i] = '0;
+            tag_wdata[i]  = addr_tag;
+            flag_wdata[i] = 4'b0001;
+        end
+    end
 
 endmodule
