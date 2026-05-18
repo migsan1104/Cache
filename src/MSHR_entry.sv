@@ -57,7 +57,7 @@ module MSHR_Entry #(
     output logic [LINE_WIDTH-1:0]      fill_line
 );
 
-    always_ff @(posedge clk) begin
+    always_ff @(posedge clk  or posedge rst) begin
 
         if (rst) begin
 
