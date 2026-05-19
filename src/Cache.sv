@@ -34,10 +34,12 @@ module Cache #(
     output logic                    mem_req_write,
     output logic [ADDR_WIDTH-1:0]   mem_req_addr,
     output logic [LINE_BYTES*8-1:0] mem_req_wdata,
+    output logic [1:0]              mem_req_id,
 
     input  logic                    mem_resp_valid,
     output logic                    mem_resp_ready,
 
+    input  logic [1:0]              mem_resp_id,
     input  logic [LINE_BYTES*8-1:0] mem_resp_rdata
 );
 
@@ -57,29 +59,13 @@ module Cache #(
 
     localparam int WAY_INDEX_W     = (ASSOC <= 1) ? 1 : $clog2(ASSOC);
 
-    // Flag bits: [0] valid, [1] dirty, [2] lock/reserved, [3] replacement/debug
-    localparam int FLAG_BITS = 4;
-
-    localparam int READ_LATENCY = 1;
+    localparam int FLAG_BITS       = 4;
+    localparam int READ_LATENCY    = 1;
 
     logic [TAG_WIDTH-1:0]       addr_tag;
     logic [SET_INDEX_W-1:0]     addr_set_id;
     logic [WORD_OFFSET_W-1:0]   addr_word_id;
     logic [LINE_ADDR_WIDTH-1:0] addr_line_addr;
-
-    Address_Decode #(
-        .ADDR_WIDTH (ADDR_WIDTH),
-        .DATA_WIDTH (DATA_WIDTH),
-        .CACHE_BYTES(CACHE_BYTES),
-        .LINE_BYTES (LINE_BYTES),
-        .ASSOC      (ASSOC)
-    ) ADDR_DECODE (
-        .addr     (cpu_req_addr),
-        .tag      (addr_tag),
-        .set_id   (addr_set_id),
-        .word_id  (addr_word_id),
-        .line_addr(addr_line_addr)
-    );
 
     logic lookup_valid_r;
     logic lookup_write_r;
@@ -122,10 +108,46 @@ module Cache #(
     logic [WAY_INDEX_W-1:0] hit_way;
     logic [DATA_WIDTH-1:0]  selected_word;
 
+    // ============================================================
+    // Memory request unit signals
+    // ============================================================
+
+    logic                         evict_valid;
+    logic                         evict_ready;
+    logic [ADDR_WIDTH-1:0]        evict_addr;
+    logic [LINE_WIDTH-1:0]        evict_line_data;
+
+    logic                         miss_valid;
+    logic                         miss_ready;
+    logic [LINE_ADDR_WIDTH-1:0]   miss_line_addr;
+    logic [1:0]                   miss_id;
+
+    // ============================================================
+    // Address decode
+    // ============================================================
+
+    Address_Decode #(
+        .ADDR_WIDTH (ADDR_WIDTH),
+        .DATA_WIDTH (DATA_WIDTH),
+        .CACHE_BYTES(CACHE_BYTES),
+        .LINE_BYTES (LINE_BYTES),
+        .ASSOC      (ASSOC)
+    ) ADDR_DECODE (
+        .addr     (cpu_req_addr),
+        .tag      (addr_tag),
+        .set_id   (addr_set_id),
+        .word_id  (addr_word_id),
+        .line_addr(addr_line_addr)
+    );
+
     assign array_rindex = addr_set_id;
     assign array_windex = lookup_set_id_r;
 
     assign cpu_req_ready = cpu_resp_ready || !cpu_resp_valid;
+
+    // ============================================================
+    // Request pipeline stage
+    // ============================================================
 
     always_ff @(posedge clk) begin
         if (rst) begin
@@ -149,6 +171,10 @@ module Cache #(
             lookup_line_addr_r <= addr_line_addr;
         end
     end
+
+    // ============================================================
+    // Compare pipeline stage
+    // ============================================================
 
     always_ff @(posedge clk) begin
         if (rst) begin
@@ -178,6 +204,10 @@ module Cache #(
             end
         end
     end
+
+    // ============================================================
+    // Cache ways
+    // ============================================================
 
     genvar way;
 
@@ -240,6 +270,10 @@ module Cache #(
         end
     endgenerate
 
+    // ============================================================
+    // Hit selection
+    // ============================================================
+
     always_comb begin
         hit_way       = '0;
         selected_word = '0;
@@ -252,17 +286,66 @@ module Cache #(
         end
     end
 
+    // ============================================================
+    // CPU response
+    // ============================================================
+
     assign cpu_resp_valid = compare_valid_r;
     assign cpu_resp_hit   = compare_valid_r && |way_hit;
     assign cpu_resp_rdata = selected_word;
     assign cpu_resp_id    = 2'b00;
 
-    assign mem_req_valid = 1'b0;
-    assign mem_req_write = 1'b0;
-    assign mem_req_addr  = '0;
-    assign mem_req_wdata = '0;
+    // ============================================================
+    // Placeholder miss/eviction generation
+    // ============================================================
+
+    assign evict_valid     = 1'b0;
+    assign evict_addr      = '0;
+    assign evict_line_data = '0;
+
+    assign miss_valid      = compare_valid_r && !|way_hit;
+    assign miss_line_addr  = compare_line_addr_r;
+    assign miss_id         = 2'b00;
+
+    // ============================================================
+    // Memory request unit
+    // ============================================================
+
+    Memory_Request_Unit #(
+        .ADDR_WIDTH     (ADDR_WIDTH),
+        .LINE_WIDTH     (LINE_WIDTH),
+        .LINE_ADDR_WIDTH(LINE_ADDR_WIDTH),
+        .LINE_BYTES     (LINE_BYTES),
+        .ID_WIDTH       (2),
+        .WB_DEPTH       (8),
+        .MISS_DEPTH     (8)
+    ) MEM_REQ_UNIT (
+        .clk            (clk),
+        .rst            (rst),
+
+        .evict_valid    (evict_valid),
+        .evict_ready    (evict_ready),
+        .evict_addr     (evict_addr),
+        .evict_line_data(evict_line_data),
+
+        .miss_valid     (miss_valid),
+        .miss_ready     (miss_ready),
+        .miss_line_addr (miss_line_addr),
+        .miss_id        (miss_id),
+
+        .mem_req_valid  (mem_req_valid),
+        .mem_req_ready  (mem_req_ready),
+        .mem_req_write  (mem_req_write),
+        .mem_req_addr   (mem_req_addr),
+        .mem_req_wdata  (mem_req_wdata),
+        .mem_req_id     (mem_req_id)
+    );
 
     assign mem_resp_ready = 1'b1;
+
+    // ============================================================
+    // Placeholder write controls
+    // ============================================================
 
     always_comb begin
         data_wen = '0;

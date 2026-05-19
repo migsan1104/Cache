@@ -17,9 +17,6 @@ module FIFO #(
 
     logic [WIDTH-1:0] ram [DEPTH];
 
-    logic valid_wr;
-    logic valid_rd;
-
     localparam int ADDR_WIDTH = $clog2(DEPTH) + 1;
 
     logic [ADDR_WIDTH-1:0] wr_addr_r;
@@ -40,20 +37,18 @@ module FIFO #(
             rd_valid  <= 1'b0;
         end
         else begin
-            rd_valid <= valid_rd;
+            rd_valid <= rd_en;
 
-            if (valid_wr) begin
+            if (we_en) begin
                 wr_addr_r <= wr_addr_r + 1'b1;
             end
 
-            if (valid_rd) begin
+            if (rd_en) begin
                 rd_addr_r <= rd_addr_r + 1'b1;
             end
         end
     end
 
-    assign valid_wr = wr_en && !full;
-    assign valid_rd = rd_en && !empty;
 
     assign full  = (rd_addr_r[ADDR_WIDTH-2:0] == wr_addr_r[ADDR_WIDTH-2:0]) &&
                    (rd_addr_r[ADDR_WIDTH-1]   != wr_addr_r[ADDR_WIDTH-1]);
