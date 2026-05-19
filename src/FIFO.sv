@@ -1,4 +1,4 @@
-module fifo #(
+module FIFO #(
     parameter int WIDTH = 16,
     parameter int DEPTH = 32
 ) (
