@@ -138,6 +138,8 @@ module Cache #(
     logic [WAY_INDEX_W-1:0] hit_way;
     logic [DATA_WIDTH-1:0] selected_word;
 
+    logic [WAY_INDEX_W-1:0] victim_way;
+
     logic                         mshr_alloc_ready;
     logic [MSHR_ID_WIDTH-1:0]     mshr_alloc_id;
 
@@ -192,6 +194,8 @@ module Cache #(
     assign array_rindex        = addr_set_id;
     assign cpu_array_windex    = select_set_id_r;
     assign refill_array_windex = mshr_resp_set_id;
+
+    assign victim_way = '0; // placeholder until Replacement.sv is wired
 
     assign cpu_req_ready =
         (cpu_resp_ready || !cpu_resp_valid) &&
@@ -429,7 +433,7 @@ module Cache #(
         .alloc_set_id       (select_set_id_r),
         .alloc_word_id      (select_word_id_r),
         .alloc_tag          (select_tag_r),
-        .alloc_way          (select_hit_way_r),
+        .alloc_way          (victim_way),
 
         .alloc_write        (select_write_r),
         .alloc_wdata        (select_wdata_r),
@@ -471,29 +475,29 @@ module Cache #(
     assign mshr_resp_ready = 1'b1;
 
     // ============================================================
-    // Placeholder refill write controls
+    // Refill write controls
     // ============================================================
 
-    always_comb begin
-        refill_data_wen = '0;
-        refill_tag_wen  = '0;
-        refill_flag_wen = '0;
+    Refill_Write_Control #(
+        .ASSOC      (ASSOC),
+        .LINE_WIDTH (LINE_WIDTH),
+        .TAG_WIDTH  (TAG_WIDTH),
+        .FLAG_BITS  (FLAG_BITS),
+        .WAY_INDEX_W(WAY_INDEX_W)
+    ) REFILL_WRITE_CONTROL (
+        .refill_valid(mshr_resp_valid),
+        .refill_write(mshr_resp_write),
+        .refill_way  (mshr_resp_way),
+        .refill_line (mshr_resp_fill_line),
+        .refill_tag  (mshr_resp_tag),
 
-        for (int i = 0; i < ASSOC; i++) begin
-            refill_data_wline[i] = '0;
-            refill_tag_wdata[i]  = '0;
-            refill_flag_wdata[i] = '0;
-        end
-
-        if (mshr_resp_valid) begin
-            refill_data_wen[mshr_resp_way]         = 1'b1;
-            refill_tag_wen[mshr_resp_way]          = 1'b1;
-            refill_flag_wen[mshr_resp_way]         = 1'b1;
-            refill_data_wline[mshr_resp_way]       = mshr_resp_fill_line;
-            refill_tag_wdata[mshr_resp_way]        = mshr_resp_tag;
-            refill_flag_wdata[mshr_resp_way]       = 4'b0001;
-        end
-    end
+        .data_wen    (refill_data_wen),
+        .tag_wen     (refill_tag_wen),
+        .flag_wen    (refill_flag_wen),
+        .data_wline  (refill_data_wline),
+        .tag_wdata   (refill_tag_wdata),
+        .flag_wdata  (refill_flag_wdata)
+    );
 
     // ============================================================
     // Placeholder eviction generation
@@ -545,19 +549,33 @@ module Cache #(
     assign mem_resp_ready = 1'b1;
 
     // ============================================================
-    // Placeholder CPU write-hit controls
+    // CPU write-hit controls
     // ============================================================
 
-    always_comb begin
-        cpu_data_wen = '0;
-        cpu_tag_wen  = '0;
-        cpu_flag_wen = '0;
+    CPU_Write_Hit_Control #(
+        .ASSOC        (ASSOC),
+        .DATA_WIDTH   (DATA_WIDTH),
+        .LINE_WIDTH   (LINE_WIDTH),
+        .TAG_WIDTH    (TAG_WIDTH),
+        .FLAG_BITS    (FLAG_BITS),
+        .WAY_INDEX_W  (WAY_INDEX_W),
+        .WORD_OFFSET_W(WORD_OFFSET_W)
+    ) CPU_WRITE_HIT_CONTROL (
+        .valid     (select_valid_r),
+        .hit       (select_hit_r),
+        .write     (select_write_r),
+        .hit_way   (select_hit_way_r),
+        .word_id   (select_word_id_r),
+        .wdata     (select_wdata_r),
+        .tag       (select_tag_r),
+        .old_line  (data_rline_r),
 
-        for (int i = 0; i < ASSOC; i++) begin
-            cpu_data_wline[i] = '0;
-            cpu_tag_wdata[i]  = select_tag_r;
-            cpu_flag_wdata[i] = 4'b0001;
-        end
-    end
+        .data_wen  (cpu_data_wen),
+        .tag_wen   (cpu_tag_wen),
+        .flag_wen  (cpu_flag_wen),
+        .data_wline(cpu_data_wline),
+        .tag_wdata (cpu_tag_wdata),
+        .flag_wdata(cpu_flag_wdata)
+    );
 
 endmodule

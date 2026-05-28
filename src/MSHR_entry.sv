@@ -1,9 +1,3 @@
-// ============================================================
-// Single MSHR entry
-// Stores one outstanding cache miss transaction
-// Tracks issue state and assembles refill line one word beat at a time
-// ============================================================
-
 module MSHR_Entry #(
     parameter int LINE_ADDR_WIDTH = 16,
     parameter int SET_INDEX_W     = 4,
@@ -59,12 +53,13 @@ module MSHR_Entry #(
 );
 
     localparam int WORDS_PER_LINE = LINE_WIDTH / DATA_WIDTH;
+    localparam int BEAT_COUNT_W   = (WORDS_PER_LINE <= 1) ? 1 : $clog2(WORDS_PER_LINE);
 
-    logic [WORD_OFFSET_W-1:0] beat_count;
-    logic [WORD_OFFSET_W-1:0] fill_word_id;
-    logic [DATA_WIDTH-1:0]    fill_word_data;
+    logic [BEAT_COUNT_W-1:0]     beat_count;
+    logic [WORD_OFFSET_W-1:0]    fill_word_id;
+    logic [DATA_WIDTH-1:0]       fill_word_data;
 
-    assign fill_word_id = word_id + beat_count;
+    assign fill_word_id = word_id + beat_count[WORD_OFFSET_W-1:0];
 
     always_comb begin
         fill_word_data = complete_word_data;
@@ -96,7 +91,6 @@ module MSHR_Entry #(
             fill_line     <= '0;
         end
         else begin
-
             if (alloc) begin
                 valid         <= 1'b1;
                 issue_pending <= 1'b1;
@@ -122,7 +116,7 @@ module MSHR_Entry #(
                 issue_pending <= 1'b0;
             end
 
-            if (complete) begin
+            if (complete && valid && !completed) begin
                 fill_line[fill_word_id * DATA_WIDTH +: DATA_WIDTH] <= fill_word_data;
 
                 if (beat_count == WORDS_PER_LINE-1) begin
@@ -138,7 +132,6 @@ module MSHR_Entry #(
                 completed     <= 1'b0;
                 beat_count    <= '0;
             end
-
         end
     end
 
