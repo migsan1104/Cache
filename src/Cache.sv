@@ -3,6 +3,7 @@
 // One data/tag/flag array per way
 // Address format: [tag ID][set ID][word ID]
 // Uses RAM_2W1R: port A = CPU write side, port B = refill side
+// Downstream memory interface is one-word request/response
 // ============================================================
 
 module Cache #(
@@ -37,14 +38,14 @@ module Cache #(
 
     output logic                      mem_req_write,
     output logic [ADDR_WIDTH-1:0]     mem_req_addr,
-    output logic [LINE_BYTES*8-1:0]   mem_req_wdata,
+    output logic [DATA_WIDTH-1:0]     mem_req_wdata,
     output logic [MSHR_ID_WIDTH-1:0]  mem_req_id,
 
     input  logic                      mem_resp_valid,
     output logic                      mem_resp_ready,
 
     input  logic [MSHR_ID_WIDTH-1:0]  mem_resp_id,
-    input  logic [LINE_BYTES*8-1:0]   mem_resp_rdata
+    input  logic [DATA_WIDTH-1:0]     mem_resp_rdata
 );
 
     localparam int WORD_BYTES      = DATA_WIDTH / 8;
@@ -133,22 +134,20 @@ module Cache #(
 
     logic [LINE_WIDTH-1:0] data_rline_r [ASSOC];
 
-    logic [ASSOC-1:0]      way_hit;
-    logic [DATA_WIDTH-1:0] way_word [ASSOC];
+    logic [ASSOC-1:0]       way_hit;
+    logic [DATA_WIDTH-1:0]  way_word [ASSOC];
     logic [WAY_INDEX_W-1:0] hit_way;
-    logic [DATA_WIDTH-1:0] selected_word;
+    logic [DATA_WIDTH-1:0]  selected_word;
 
     logic [WAY_INDEX_W-1:0] victim_way;
 
     logic                         mshr_alloc_ready;
     logic [MSHR_ID_WIDTH-1:0]     mshr_alloc_id;
 
-    logic [3:0]                   mshr_issue_pending;
-    logic [LINE_ADDR_WIDTH-1:0]   mshr_issue_line_addr [4];
-    logic [WORD_OFFSET_W-1:0]     mshr_issue_word_id   [4];
-
     logic                         mshr_resp_valid;
     logic                         mshr_resp_ready;
+    logic                         mshr_resp_fire;
+
     logic [CPU_ID_WIDTH-1:0]      mshr_resp_cpu_req_id;
     logic [MSHR_ID_WIDTH-1:0]     mshr_resp_mshr_id;
     logic [LINE_ADDR_WIDTH-1:0]   mshr_resp_line_addr;
@@ -159,19 +158,22 @@ module Cache #(
     logic                         mshr_resp_write;
     logic [DATA_WIDTH-1:0]        mshr_resp_wdata;
     logic [LINE_WIDTH-1:0]        mshr_resp_fill_line;
+    logic [DATA_WIDTH-1:0]        mshr_resp_word_data;
 
     logic                         mshr_full;
     logic                         mshr_empty;
 
-    logic                         evict_valid;
-    logic                         evict_ready;
-    logic [ADDR_WIDTH-1:0]        evict_addr;
-    logic [LINE_WIDTH-1:0]        evict_line_data;
+    logic [3:0]                   mshr_req_valid;
+    logic [3:0]                   mshr_req_write;
+    logic [ADDR_WIDTH-1:0]        mshr_req_addr  [4];
+    logic [DATA_WIDTH-1:0]        mshr_req_wdata [4];
+    logic [MSHR_ID_WIDTH-1:0]     mshr_req_id    [4];
+    logic [3:0]                   mshr_issued;
 
     logic                         miss_valid;
-    logic                         miss_ready;
-    logic [LINE_ADDR_WIDTH-1:0]   miss_line_addr;
-    logic [MSHR_ID_WIDTH-1:0]     miss_id;
+
+    logic                         hit_resp_valid;
+    logic                         miss_resp_valid;
 
     // ============================================================
     // Address decode
@@ -401,11 +403,6 @@ module Cache #(
         end
     end
 
-    assign cpu_resp_valid = select_valid_r && select_hit_r;
-    assign cpu_resp_hit   = select_hit_r;
-    assign cpu_resp_rdata = select_rdata_r;
-    assign cpu_resp_id    = select_cpu_req_id_r;
-
     // ============================================================
     // Miss detection into MSHR file
     // ============================================================
@@ -413,15 +410,16 @@ module Cache #(
     assign miss_valid = select_valid_r && !select_hit_r;
 
     MSHR_File #(
-        .LINE_ADDR_WIDTH(LINE_ADDR_WIDTH),
-        .SET_INDEX_W    (SET_INDEX_W),
-        .WORD_OFFSET_W  (WORD_OFFSET_W),
-        .TAG_WIDTH      (TAG_WIDTH),
-        .WAY_INDEX_W    (WAY_INDEX_W),
-        .DATA_WIDTH     (DATA_WIDTH),
-        .LINE_WIDTH     (LINE_WIDTH),
-        .CPU_ID_WIDTH   (CPU_ID_WIDTH),
-        .MSHR_ID_WIDTH  (MSHR_ID_WIDTH)
+        .ADDR_WIDTH      (ADDR_WIDTH),
+        .LINE_ADDR_WIDTH (LINE_ADDR_WIDTH),
+        .SET_INDEX_W     (SET_INDEX_W),
+        .WORD_OFFSET_W   (WORD_OFFSET_W),
+        .TAG_WIDTH       (TAG_WIDTH),
+        .WAY_INDEX_W     (WAY_INDEX_W),
+        .DATA_WIDTH      (DATA_WIDTH),
+        .LINE_WIDTH      (LINE_WIDTH),
+        .CPU_ID_WIDTH    (CPU_ID_WIDTH),
+        .MSHR_ID_WIDTH   (MSHR_ID_WIDTH)
     ) MSHR_FILE (
         .clk                (clk),
         .rst                (rst),
@@ -441,12 +439,11 @@ module Cache #(
 
         .alloc_mshr_id      (mshr_alloc_id),
 
-        .issue_done_valid   (1'b0),
-        .issue_done_mshr_id ('0),
+        .issued             (mshr_issued),
 
-        .complete_valid     (1'b0),
-        .complete_mshr_id   ('0),
-        .complete_word_data ('0),
+        .complete_valid     (mem_resp_valid),
+        .complete_mshr_id   (mem_resp_id),
+        .complete_word_data (mem_resp_rdata),
 
         .resp_valid         (mshr_resp_valid),
         .resp_ready         (mshr_resp_ready),
@@ -464,15 +461,70 @@ module Cache #(
         .resp_wdata         (mshr_resp_wdata),
         .resp_fill_line     (mshr_resp_fill_line),
 
-        .issue_pending      (mshr_issue_pending),
-        .issue_line_addr    (mshr_issue_line_addr),
-        .issue_word_id      (mshr_issue_word_id),
+        .req_valid          (mshr_req_valid),
+        .req_write          (mshr_req_write),
+        .req_addr           (mshr_req_addr),
+        .req_wdata          (mshr_req_wdata),
+        .req_id             (mshr_req_id),
 
         .full               (mshr_full),
         .empty              (mshr_empty)
     );
 
-    assign mshr_resp_ready = 1'b1;
+    // ============================================================
+    // MSHR request arbiter directly drives downstream memory port
+    // ============================================================
+
+    MSHR_Request_Arbiter #(
+        .MSHR_COUNT   (4),
+        .ADDR_WIDTH   (ADDR_WIDTH),
+        .DATA_WIDTH   (DATA_WIDTH),
+        .MSHR_ID_WIDTH(MSHR_ID_WIDTH)
+    ) MSHR_REQ_ARBITER (
+        .clk          (clk),
+        .rst          (rst),
+
+        .req_valid    (mshr_req_valid),
+        .req_write    (mshr_req_write),
+        .req_addr     (mshr_req_addr),
+        .req_wdata    (mshr_req_wdata),
+        .req_id       (mshr_req_id),
+
+        .issued       (mshr_issued),
+
+        .mem_req_valid(mem_req_valid),
+        .mem_req_ready(mem_req_ready),
+        .mem_req_write(mem_req_write),
+        .mem_req_addr (mem_req_addr),
+        .mem_req_wdata(mem_req_wdata),
+        .mem_req_id   (mem_req_id)
+    );
+
+    assign mem_resp_ready = 1'b1;
+
+    // ============================================================
+    // CPU response mux: hit response or completed miss response
+    // ============================================================
+
+    assign hit_resp_valid  = select_valid_r && select_hit_r;
+    assign miss_resp_valid = mshr_resp_valid;
+
+    assign mshr_resp_word_data =
+        mshr_resp_fill_line[mshr_resp_word_id * DATA_WIDTH +: DATA_WIDTH];
+
+    assign cpu_resp_valid = hit_resp_valid || miss_resp_valid;
+
+    assign cpu_resp_hit =
+        hit_resp_valid ? 1'b1 : 1'b0;
+
+    assign cpu_resp_rdata =
+        hit_resp_valid ? select_rdata_r : mshr_resp_word_data;
+
+    assign cpu_resp_id =
+        hit_resp_valid ? select_cpu_req_id_r : mshr_resp_cpu_req_id;
+
+    assign mshr_resp_ready = cpu_resp_ready && !hit_resp_valid;
+    assign mshr_resp_fire  = mshr_resp_valid && mshr_resp_ready;
 
     // ============================================================
     // Refill write controls
@@ -485,7 +537,7 @@ module Cache #(
         .FLAG_BITS  (FLAG_BITS),
         .WAY_INDEX_W(WAY_INDEX_W)
     ) REFILL_WRITE_CONTROL (
-        .refill_valid(mshr_resp_valid),
+        .refill_valid(mshr_resp_fire),
         .refill_write(mshr_resp_write),
         .refill_way  (mshr_resp_way),
         .refill_line (mshr_resp_fill_line),
@@ -498,55 +550,6 @@ module Cache #(
         .tag_wdata   (refill_tag_wdata),
         .flag_wdata  (refill_flag_wdata)
     );
-
-    // ============================================================
-    // Placeholder eviction generation
-    // ============================================================
-
-    assign evict_valid     = 1'b0;
-    assign evict_addr      = '0;
-    assign evict_line_data = '0;
-
-    // ============================================================
-    // Placeholder memory request unit
-    // Real miss requests should eventually come from MSHR_Scheduler
-    // ============================================================
-
-    assign miss_ready     = 1'b1;
-    assign miss_line_addr = '0;
-    assign miss_id        = '0;
-
-    Memory_Request_Unit #(
-        .ADDR_WIDTH     (ADDR_WIDTH),
-        .LINE_WIDTH     (LINE_WIDTH),
-        .LINE_ADDR_WIDTH(LINE_ADDR_WIDTH),
-        .LINE_BYTES     (LINE_BYTES),
-        .ID_WIDTH       (MSHR_ID_WIDTH),
-        .WB_DEPTH       (8),
-        .MISS_DEPTH     (8)
-    ) MEM_REQ_UNIT (
-        .clk            (clk),
-        .rst            (rst),
-
-        .evict_valid    (evict_valid),
-        .evict_ready    (evict_ready),
-        .evict_addr     (evict_addr),
-        .evict_line_data(evict_line_data),
-
-        .miss_valid     (1'b0),
-        .miss_ready     (miss_ready),
-        .miss_line_addr (miss_line_addr),
-        .miss_id        (miss_id),
-
-        .mem_req_valid  (mem_req_valid),
-        .mem_req_ready  (mem_req_ready),
-        .mem_req_write  (mem_req_write),
-        .mem_req_addr   (mem_req_addr),
-        .mem_req_wdata  (mem_req_wdata),
-        .mem_req_id     (mem_req_id)
-    );
-
-    assign mem_resp_ready = 1'b1;
 
     // ============================================================
     // CPU write-hit controls

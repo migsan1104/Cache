@@ -1,4 +1,11 @@
+// ============================================================
+// Single MSHR entry
+// Owns miss state, issues one-word downstream requests,
+// collects refill responses, and exposes completed refill line
+// ============================================================
+
 module MSHR_Entry #(
+    parameter int ADDR_WIDTH      = 32,
     parameter int LINE_ADDR_WIDTH = 16,
     parameter int SET_INDEX_W     = 4,
     parameter int WORD_OFFSET_W   = 2,
@@ -26,7 +33,7 @@ module MSHR_Entry #(
     input  logic [CPU_ID_WIDTH-1:0]    alloc_cpu_req_id,
     input  logic [MSHR_ID_WIDTH-1:0]   alloc_mshr_id,
 
-    input  logic                       issue_done,
+    input  logic                       issued,
 
     input  logic                       complete,
     input  logic [DATA_WIDTH-1:0]      complete_word_data,
@@ -34,7 +41,12 @@ module MSHR_Entry #(
     input  logic                       free,
 
     output logic                       valid,
-    output logic                       issue_pending,
+
+    output logic                       req_valid,
+    output logic                       req_write,
+    output logic [ADDR_WIDTH-1:0]      req_addr,
+    output logic [DATA_WIDTH-1:0]      req_wdata,
+    output logic [MSHR_ID_WIDTH-1:0]   req_mshr_id,
 
     output logic [LINE_ADDR_WIDTH-1:0] line_addr,
     output logic [SET_INDEX_W-1:0]     set_id,
@@ -55,83 +67,130 @@ module MSHR_Entry #(
     localparam int WORDS_PER_LINE = LINE_WIDTH / DATA_WIDTH;
     localparam int BEAT_COUNT_W   = (WORDS_PER_LINE <= 1) ? 1 : $clog2(WORDS_PER_LINE);
 
-    logic [BEAT_COUNT_W-1:0]     beat_count;
-    logic [WORD_OFFSET_W-1:0]    fill_word_id;
-    logic [DATA_WIDTH-1:0]       fill_word_data;
+    typedef enum logic [1:0] {
+        S_IDLE,
+        S_ISSUE,
+        S_WAIT_R,
+        S_DONE
+    } state_t;
 
-    assign fill_word_id = word_id + beat_count[WORD_OFFSET_W-1:0];
+    state_t state;
+
+    logic [BEAT_COUNT_W-1:0]  issue_count;
+    logic [BEAT_COUNT_W-1:0]  recv_count;
+
+    logic [WORD_OFFSET_W-1:0] issue_word_id;
+    logic [WORD_OFFSET_W-1:0] recv_word_id;
+
+    logic [DATA_WIDTH-1:0] fill_word_data;
+
+    assign valid     = (state != S_IDLE);
+    assign completed = (state == S_DONE);
+
+    assign issue_word_id = word_id + issue_count[WORD_OFFSET_W-1:0];
+    assign recv_word_id  = word_id + recv_count[WORD_OFFSET_W-1:0];
+
+    assign req_valid   = (state == S_ISSUE);
+    assign req_write   = 1'b0;
+    assign req_wdata   = '0;
+    assign req_mshr_id = mshr_id;
+
+    assign req_addr = {{(ADDR_WIDTH-LINE_ADDR_WIDTH-WORD_OFFSET_W){1'b0}},
+                       line_addr,
+                       issue_word_id};
 
     always_comb begin
         fill_word_data = complete_word_data;
 
-        if (write && (fill_word_id == word_id)) begin
+        if (write && (recv_word_id == word_id)) begin
             fill_word_data = wdata;
         end
     end
 
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
-            valid         <= 1'b0;
-            issue_pending <= 1'b0;
-            completed     <= 1'b0;
+            state       <= S_IDLE;
 
-            line_addr     <= '0;
-            set_id        <= '0;
-            word_id       <= '0;
-            tag           <= '0;
-            way           <= '0;
+            line_addr   <= '0;
+            set_id      <= '0;
+            word_id     <= '0;
+            tag         <= '0;
+            way         <= '0;
 
-            write         <= 1'b0;
-            wdata         <= '0;
+            write       <= 1'b0;
+            wdata       <= '0;
 
-            cpu_req_id    <= '0;
-            mshr_id       <= '0;
+            cpu_req_id  <= '0;
+            mshr_id     <= '0;
 
-            beat_count    <= '0;
-            fill_line     <= '0;
+            issue_count <= '0;
+            recv_count  <= '0;
+            fill_line   <= '0;
         end
         else begin
-            if (alloc) begin
-                valid         <= 1'b1;
-                issue_pending <= 1'b1;
-                completed     <= 1'b0;
+            case (state)
 
-                line_addr     <= alloc_line_addr;
-                set_id        <= alloc_set_id;
-                word_id       <= alloc_word_id;
-                tag           <= alloc_tag;
-                way           <= alloc_way;
+                S_IDLE: begin
+                    if (alloc) begin
+                        line_addr   <= alloc_line_addr;
+                        set_id      <= alloc_set_id;
+                        word_id     <= alloc_word_id;
+                        tag         <= alloc_tag;
+                        way         <= alloc_way;
 
-                write         <= alloc_write;
-                wdata         <= alloc_wdata;
+                        write       <= alloc_write;
+                        wdata       <= alloc_wdata;
 
-                cpu_req_id    <= alloc_cpu_req_id;
-                mshr_id       <= alloc_mshr_id;
+                        cpu_req_id  <= alloc_cpu_req_id;
+                        mshr_id     <= alloc_mshr_id;
 
-                beat_count    <= '0;
-                fill_line     <= '0;
-            end
+                        issue_count <= '0;
+                        recv_count  <= '0;
+                        fill_line   <= '0;
 
-            if (issue_done) begin
-                issue_pending <= 1'b0;
-            end
-
-            if (complete && valid && !completed) begin
-                fill_line[fill_word_id * DATA_WIDTH +: DATA_WIDTH] <= fill_word_data;
-
-                if (beat_count == WORDS_PER_LINE-1) begin
-                    completed <= 1'b1;
+                        state       <= S_ISSUE;
+                    end
                 end
 
-                beat_count <= beat_count + 1'b1;
-            end
+                S_ISSUE: begin
+                    if (issued) begin
+                        if (issue_count == WORDS_PER_LINE-1) begin
+                            issue_count <= '0;
+                            state       <= S_WAIT_R;
+                        end
+                        else begin
+                            issue_count <= issue_count + 1'b1;
+                        end
+                    end
+                end
 
-            if (free) begin
-                valid         <= 1'b0;
-                issue_pending <= 1'b0;
-                completed     <= 1'b0;
-                beat_count    <= '0;
-            end
+                S_WAIT_R: begin
+                    if (complete) begin
+                        fill_line[recv_word_id * DATA_WIDTH +: DATA_WIDTH] <= fill_word_data;
+
+                        if (recv_count == WORDS_PER_LINE-1) begin
+                            recv_count <= '0;
+                            state      <= S_DONE;
+                        end
+                        else begin
+                            recv_count <= recv_count + 1'b1;
+                        end
+                    end
+                end
+
+                S_DONE: begin
+                    if (free) begin
+                        state       <= S_IDLE;
+                        issue_count <= '0;
+                        recv_count  <= '0;
+                    end
+                end
+
+                default: begin
+                    state <= S_IDLE;
+                end
+
+            endcase
         end
     end
 
