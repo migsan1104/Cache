@@ -1,9 +1,17 @@
 // ============================================================
 // 4-entry MSHR file with internal absorption FIFO
-// Frontend misses enqueue into FIFO, MSHR entries allocate from FIFO
+//
+// Responsibilities:
+// - Absorb frontend misses into FIFO
+// - Allocate free MSHR entries
+// - Demux memory response valid into the selected MSHR
+// - Mux MSHR miss response ID metadata
+// - Mux full-line refill writes into cache write side
+// - Expose MSHR request outputs to MSHR_Request_Arbiter
 // ============================================================
 
 module MSHR_File #(
+    parameter int ADDR_WIDTH      = 32,
     parameter int LINE_ADDR_WIDTH = 16,
     parameter int SET_INDEX_W     = 4,
     parameter int WORD_OFFSET_W   = 2,
@@ -17,10 +25,6 @@ module MSHR_File #(
 )(
     input  logic clk,
     input  logic rst,
-
-    // ============================================================
-    // MISS ENQUEUE FROM CACHE FRONTEND
-    // ============================================================
 
     input  logic                       alloc_valid,
     output logic                       alloc_ready,
@@ -40,29 +44,29 @@ module MSHR_File #(
     input  logic                       issue_done_valid,
     input  logic [MSHR_ID_WIDTH-1:0]   issue_done_mshr_id,
 
-    input  logic                       complete_valid,
-    input  logic [MSHR_ID_WIDTH-1:0]   complete_mshr_id,
-    input  logic [DATA_WIDTH-1:0]      complete_word_data,
+    input  logic                       mem_resp_valid,
+    input  logic [MSHR_ID_WIDTH-1:0]   mem_resp_id,
+    input  logic [DATA_WIDTH-1:0]      mem_resp_rdata,
 
-    output logic                       resp_valid,
-    input  logic                       resp_ready,
+    output logic                       miss_valid,
+    output logic [CPU_ID_WIDTH-1:0]    miss_id,
 
-    output logic [CPU_ID_WIDTH-1:0]    resp_cpu_req_id,
-    output logic [MSHR_ID_WIDTH-1:0]   resp_mshr_id,
-
-    output logic [LINE_ADDR_WIDTH-1:0] resp_line_addr,
-    output logic [SET_INDEX_W-1:0]     resp_set_id,
-    output logic [WORD_OFFSET_W-1:0]   resp_word_id,
-    output logic [TAG_WIDTH-1:0]       resp_tag,
-    output logic [WAY_INDEX_W-1:0]     resp_way,
-
-    output logic                       resp_write,
-    output logic [DATA_WIDTH-1:0]      resp_wdata,
-    output logic [LINE_WIDTH-1:0]      resp_fill_line,
+    output logic                       refill_wen,
+    output logic [SET_INDEX_W-1:0]     refill_set_id,
+    output logic [TAG_WIDTH-1:0]       refill_tag,
+    output logic [WAY_INDEX_W-1:0]     refill_way,
+    output logic                       refill_dirty,
+    output logic [LINE_WIDTH-1:0]      refill_line,
 
     output logic [3:0]                 issue_pending,
     output logic [LINE_ADDR_WIDTH-1:0] issue_line_addr [4],
     output logic [WORD_OFFSET_W-1:0]   issue_word_id   [4],
+
+    output logic [3:0]                 req_valid,
+    output logic [3:0]                 req_write,
+    output logic [ADDR_WIDTH-1:0]      req_addr  [4],
+    output logic [DATA_WIDTH-1:0]      req_wdata [4],
+    output logic [MSHR_ID_WIDTH-1:0]   req_id    [4],
 
     output logic                       full,
     output logic                       empty
@@ -102,7 +106,8 @@ module MSHR_File #(
 
     logic [MSHR_COUNT-1:0] entry_valid;
     logic [MSHR_COUNT-1:0] entry_issue_pending;
-    logic [MSHR_COUNT-1:0] entry_completed;
+    logic [MSHR_COUNT-1:0] entry_refill_wen;
+    logic [MSHR_COUNT-1:0] entry_miss_valid;
 
     logic [LINE_ADDR_WIDTH-1:0] entry_line_addr [MSHR_COUNT];
     logic [SET_INDEX_W-1:0]     entry_set_id    [MSHR_COUNT];
@@ -110,29 +115,23 @@ module MSHR_File #(
     logic [TAG_WIDTH-1:0]       entry_tag       [MSHR_COUNT];
     logic [WAY_INDEX_W-1:0]     entry_way       [MSHR_COUNT];
 
-    logic [MSHR_COUNT-1:0]      entry_write;
-    logic [DATA_WIDTH-1:0]      entry_wdata     [MSHR_COUNT];
+    logic [MSHR_COUNT-1:0]      entry_dirty;
+    logic [CPU_ID_WIDTH-1:0]    entry_cpu_req_id [MSHR_COUNT];
+    logic [CPU_ID_WIDTH-1:0]    entry_miss_id    [MSHR_COUNT];
+    logic [MSHR_ID_WIDTH-1:0]   entry_mshr_id    [MSHR_COUNT];
+    logic [LINE_WIDTH-1:0]      entry_fill_line  [MSHR_COUNT];
 
-    logic [CPU_ID_WIDTH-1:0]    entry_cpu_req_id[MSHR_COUNT];
-    logic [MSHR_ID_WIDTH-1:0]   entry_mshr_id   [MSHR_COUNT];
+    logic [MSHR_COUNT-1:0]      entry_alloc_onehot;
+    logic [MSHR_COUNT-1:0]      issue_done_onehot;
+    logic [MSHR_COUNT-1:0]      mshr_resp_valid;
 
-    logic [LINE_WIDTH-1:0]      entry_fill_line [MSHR_COUNT];
-
-    logic [MSHR_COUNT-1:0] entry_alloc_onehot;
-    logic [MSHR_COUNT-1:0] issue_done_onehot;
-    logic [MSHR_COUNT-1:0] complete_onehot;
-    logic [MSHR_COUNT-1:0] free_onehot;
-
-    logic [MSHR_ID_WIDTH-1:0] entry_alloc_idx;
-    logic [MSHR_ID_WIDTH-1:0] resp_idx;
+    logic [DATA_WIDTH-1:0]      mshr_resp_data;
+    logic [MSHR_ID_WIDTH-1:0]   entry_alloc_idx;
 
     logic entry_alloc_ready;
     logic entry_alloc_fire;
-    logic resp_fire;
 
-    // ============================================================
-    // Miss absorption FIFO
-    // ============================================================
+    logic miss_valid_raw;
 
     assign missq_wentry.line_addr  = alloc_line_addr;
     assign missq_wentry.set_id     = alloc_set_id;
@@ -143,7 +142,7 @@ module MSHR_File #(
     assign missq_wentry.wdata      = alloc_wdata;
     assign missq_wentry.cpu_req_id = alloc_cpu_req_id;
 
-    assign missq_wdata = missq_wentry;
+    assign missq_wdata  = missq_wentry;
     assign missq_rentry = missq_rdata;
 
     assign alloc_ready = !missq_almost_full;
@@ -156,19 +155,19 @@ module MSHR_File #(
     ) MISS_QUEUE (
         .clk        (clk),
         .rst        (rst),
-
         .full       (missq_full),
         .almost_full(missq_almost_full),
         .wr_en      (missq_wr_en),
         .wr_data    (missq_wdata),
-
         .empty      (missq_empty),
         .rd_en      (missq_rd_en),
         .rd_valid   (missq_rd_valid),
         .rd_data    (missq_rdata)
     );
 
-    assign missq_rd_en = !missq_empty && !dispatch_valid_r && !missq_read_pending;
+    assign missq_rd_en = !missq_empty &&
+                         !dispatch_valid_r &&
+                         !missq_read_pending;
 
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
@@ -183,10 +182,6 @@ module MSHR_File #(
             end
         end
     end
-
-    // ============================================================
-    // FIFO output holding register
-    // ============================================================
 
     assign entry_alloc_fire = dispatch_valid_r && entry_alloc_ready;
 
@@ -206,10 +201,6 @@ module MSHR_File #(
         end
     end
 
-    // ============================================================
-    // Find first free MSHR entry
-    // ============================================================
-
     always_comb begin
         entry_alloc_ready  = 1'b0;
         entry_alloc_idx    = '0;
@@ -226,12 +217,6 @@ module MSHR_File #(
 
     assign alloc_mshr_id = entry_alloc_idx;
 
-    assign resp_fire = resp_valid && resp_ready;
-
-    // ============================================================
-    // Route scheduler issue-done pulse
-    // ============================================================
-
     always_comb begin
         issue_done_onehot = '0;
 
@@ -240,62 +225,64 @@ module MSHR_File #(
         end
     end
 
-    // ============================================================
-    // Route returned word beat
-    // ============================================================
+    MSHR_Response_DeMux #(
+        .MSHR_COUNT   (MSHR_COUNT),
+        .DATA_WIDTH   (DATA_WIDTH),
+        .MSHR_ID_WIDTH(MSHR_ID_WIDTH)
+    ) RESP_DEMUX (
+        .clk            (clk),
+        .rst            (rst),
+        .mem_resp_valid (mem_resp_valid),
+        .mem_resp_id    (mem_resp_id),
+        .mem_resp_rdata (mem_resp_rdata),
+        .mshr_resp_valid(mshr_resp_valid),
+        .mshr_resp_data (mshr_resp_data)
+    );
 
-    always_comb begin
-        complete_onehot = '0;
+    assign miss_valid_raw = |entry_miss_valid;
 
-        if (complete_valid) begin
-            complete_onehot[complete_mshr_id] = 1'b1;
-        end
-    end
+    MSHR_Response_Mux #(
+        .MSHR_COUNT  (MSHR_COUNT),
+        .CPU_ID_WIDTH(CPU_ID_WIDTH)
+    ) RESP_MUX (
+        .clk             (clk),
+        .entry_miss_valid(entry_miss_valid),
+        .entry_miss_id   (entry_miss_id),
+        .miss_id         (miss_id)
+    );
 
-    // ============================================================
-    // Pick first completed MSHR for response/refill
-    // ============================================================
+    Delay_r #(
+        .D_WIDTH(1),
+        .DELAY  (1)
+    ) MISS_VALID_DELAY (
+        .clk (clk),
+        .rst (rst),
+        .din (miss_valid_raw),
+        .dout(miss_valid)
+    );
 
-    always_comb begin
-        resp_valid = 1'b0;
-        resp_idx   = '0;
-
-        for (int i = 0; i < MSHR_COUNT; i++) begin
-            if (entry_valid[i] && entry_completed[i] && !resp_valid) begin
-                resp_valid = 1'b1;
-                resp_idx   = i[MSHR_ID_WIDTH-1:0];
-            end
-        end
-    end
-
-    always_comb begin
-        free_onehot = '0;
-
-        if (resp_fire) begin
-            free_onehot[resp_idx] = 1'b1;
-        end
-    end
-
-    // ============================================================
-    // Response output mux
-    // ============================================================
-
-    assign resp_cpu_req_id = entry_cpu_req_id[resp_idx];
-    assign resp_mshr_id    = entry_mshr_id[resp_idx];
-
-    assign resp_line_addr  = entry_line_addr[resp_idx];
-    assign resp_set_id     = entry_set_id[resp_idx];
-    assign resp_word_id    = entry_word_id[resp_idx];
-    assign resp_tag        = entry_tag[resp_idx];
-    assign resp_way        = entry_way[resp_idx];
-
-    assign resp_write      = entry_write[resp_idx];
-    assign resp_wdata      = entry_wdata[resp_idx];
-    assign resp_fill_line  = entry_fill_line[resp_idx];
-
-    // ============================================================
-    // Scheduler outputs
-    // ============================================================
+    MSHR_Mux #(
+        .MSHR_COUNT (MSHR_COUNT),
+        .SET_INDEX_W(SET_INDEX_W),
+        .TAG_WIDTH  (TAG_WIDTH),
+        .WAY_INDEX_W(WAY_INDEX_W),
+        .LINE_WIDTH (LINE_WIDTH)
+    ) REFILL_MUX (
+        .clk             (clk),
+        .rst             (rst),
+        .entry_refill_wen(entry_refill_wen),
+        .entry_set_id    (entry_set_id),
+        .entry_tag       (entry_tag),
+        .entry_way       (entry_way),
+        .entry_dirty     (entry_dirty),
+        .entry_fill_line (entry_fill_line),
+        .refill_wen      (refill_wen),
+        .refill_set_id   (refill_set_id),
+        .refill_tag      (refill_tag),
+        .refill_way      (refill_way),
+        .refill_dirty    (refill_dirty),
+        .refill_line     (refill_line)
+    );
 
     assign issue_pending = entry_issue_pending;
 
@@ -309,16 +296,13 @@ module MSHR_File #(
     assign full  = missq_almost_full;
     assign empty = missq_empty && !dispatch_valid_r && ~|entry_valid;
 
-    // ============================================================
-    // Entries
-    // ============================================================
-
     genvar i;
 
     generate
         for (i = 0; i < MSHR_COUNT; i++) begin : GEN_MSHR_ENTRIES
 
             MSHR_Entry #(
+                .ADDR_WIDTH     (ADDR_WIDTH),
                 .LINE_ADDR_WIDTH(LINE_ADDR_WIDTH),
                 .SET_INDEX_W    (SET_INDEX_W),
                 .WORD_OFFSET_W  (WORD_OFFSET_W),
@@ -329,47 +313,50 @@ module MSHR_File #(
                 .CPU_ID_WIDTH   (CPU_ID_WIDTH),
                 .MSHR_ID_WIDTH  (MSHR_ID_WIDTH)
             ) ENTRY (
-                .clk                (clk),
-                .rst                (rst),
+                .clk              (clk),
+                .rst              (rst),
 
-                .alloc              (entry_alloc_fire && entry_alloc_onehot[i]),
+                .alloc            (entry_alloc_fire && entry_alloc_onehot[i]),
+                .alloc_line_addr  (dispatch_entry_r.line_addr),
+                .alloc_set_id     (dispatch_entry_r.set_id),
+                .alloc_word_id    (dispatch_entry_r.word_id),
+                .alloc_tag        (dispatch_entry_r.tag),
+                .alloc_way        (dispatch_entry_r.way),
+                .alloc_write      (dispatch_entry_r.write),
+                .alloc_wdata      (dispatch_entry_r.wdata),
+                .alloc_cpu_req_id (dispatch_entry_r.cpu_req_id),
+                .alloc_mshr_id    (i[MSHR_ID_WIDTH-1:0]),
 
-                .alloc_line_addr    (dispatch_entry_r.line_addr),
-                .alloc_set_id       (dispatch_entry_r.set_id),
-                .alloc_word_id      (dispatch_entry_r.word_id),
-                .alloc_tag          (dispatch_entry_r.tag),
-                .alloc_way          (dispatch_entry_r.way),
+                .issue_done       (issue_done_onehot[i]),
 
-                .alloc_write        (dispatch_entry_r.write),
-                .alloc_wdata        (dispatch_entry_r.wdata),
+                .resp_valid       (mshr_resp_valid[i]),
+                .resp_data        (mshr_resp_data),
 
-                .alloc_cpu_req_id   (dispatch_entry_r.cpu_req_id),
-                .alloc_mshr_id      (i[MSHR_ID_WIDTH-1:0]),
+                .valid            (entry_valid[i]),
+                .issue_pending    (entry_issue_pending[i]),
 
-                .issue_done         (issue_done_onehot[i]),
+                .req_valid        (req_valid[i]),
+                .req_write        (req_write[i]),
+                .req_addr         (req_addr[i]),
+                .req_wdata        (req_wdata[i]),
+                .req_mshr_id      (req_id[i]),
 
-                .complete           (complete_onehot[i]),
-                .complete_word_data (complete_word_data),
+                .line_addr        (entry_line_addr[i]),
+                .set_id           (entry_set_id[i]),
+                .word_id          (entry_word_id[i]),
+                .tag              (entry_tag[i]),
+                .way              (entry_way[i]),
 
-                .free               (free_onehot[i]),
+                .dirty            (entry_dirty[i]),
 
-                .valid              (entry_valid[i]),
-                .issue_pending      (entry_issue_pending[i]),
+                .cpu_req_id       (entry_cpu_req_id[i]),
+                .mshr_id          (entry_mshr_id[i]),
 
-                .line_addr          (entry_line_addr[i]),
-                .set_id             (entry_set_id[i]),
-                .word_id            (entry_word_id[i]),
-                .tag                (entry_tag[i]),
-                .way                (entry_way[i]),
+                .miss_valid       (entry_miss_valid[i]),
+                .miss_id          (entry_miss_id[i]),
 
-                .write              (entry_write[i]),
-                .wdata              (entry_wdata[i]),
-
-                .cpu_req_id         (entry_cpu_req_id[i]),
-                .mshr_id            (entry_mshr_id[i]),
-
-                .completed          (entry_completed[i]),
-                .fill_line          (entry_fill_line[i])
+                .refill_wen       (entry_refill_wen[i]),
+                .fill_line        (entry_fill_line[i])
             );
 
         end

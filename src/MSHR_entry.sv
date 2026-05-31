@@ -1,11 +1,13 @@
 // ============================================================
 // Single MSHR entry
-// Owns miss state, issues one-word downstream requests,
-// collects refill responses, and exposes completed refill line
+// Owns miss metadata, issues refill requests,
+// receives its own demuxed response beats,
+// assembles full refill line,
+// pulses miss_valid for the critical word,
+// and pulses refill_wen once when the full line is ready.
 // ============================================================
 
 module MSHR_Entry #(
-    parameter int ADDR_WIDTH      = 32,
     parameter int LINE_ADDR_WIDTH = 16,
     parameter int SET_INDEX_W     = 4,
     parameter int WORD_OFFSET_W   = 2,
@@ -33,20 +35,13 @@ module MSHR_Entry #(
     input  logic [CPU_ID_WIDTH-1:0]    alloc_cpu_req_id,
     input  logic [MSHR_ID_WIDTH-1:0]   alloc_mshr_id,
 
-    input  logic                       issued,
+    input  logic                       issue_done,
 
-    input  logic                       complete,
-    input  logic [DATA_WIDTH-1:0]      complete_word_data,
-
-    input  logic                       free,
+    input  logic                       resp_valid,
+    input  logic [DATA_WIDTH-1:0]      resp_data,
 
     output logic                       valid,
-
-    output logic                       req_valid,
-    output logic                       req_write,
-    output logic [ADDR_WIDTH-1:0]      req_addr,
-    output logic [DATA_WIDTH-1:0]      req_wdata,
-    output logic [MSHR_ID_WIDTH-1:0]   req_mshr_id,
+    output logic                       issue_pending,
 
     output logic [LINE_ADDR_WIDTH-1:0] line_addr,
     output logic [SET_INDEX_W-1:0]     set_id,
@@ -54,13 +49,15 @@ module MSHR_Entry #(
     output logic [TAG_WIDTH-1:0]       tag,
     output logic [WAY_INDEX_W-1:0]     way,
 
-    output logic                       write,
-    output logic [DATA_WIDTH-1:0]      wdata,
+    output logic                       dirty,
 
     output logic [CPU_ID_WIDTH-1:0]    cpu_req_id,
     output logic [MSHR_ID_WIDTH-1:0]   mshr_id,
 
-    output logic                       completed,
+    output logic                       miss_valid,
+    output logic [CPU_ID_WIDTH-1:0]    miss_id,
+
+    output logic                       refill_wen,
     output logic [LINE_WIDTH-1:0]      fill_line
 );
 
@@ -69,91 +66,85 @@ module MSHR_Entry #(
 
     typedef enum logic [1:0] {
         S_IDLE,
-        S_ISSUE,
+        S_ISSUE_R,
         S_WAIT_R,
-        S_DONE
+        S_REFILL
     } state_t;
 
     state_t state;
 
-    logic [BEAT_COUNT_W-1:0]  issue_count;
-    logic [BEAT_COUNT_W-1:0]  recv_count;
+    logic [BEAT_COUNT_W-1:0] issue_count;
+    logic [BEAT_COUNT_W-1:0] recv_count;
 
+    logic [WORD_OFFSET_W-1:0] miss_word_id_r;
     logic [WORD_OFFSET_W-1:0] issue_word_id;
     logic [WORD_OFFSET_W-1:0] recv_word_id;
 
-    logic [DATA_WIDTH-1:0] fill_word_data;
+    logic [DATA_WIDTH-1:0] beat_data;
+    logic [LINE_WIDTH-1:0] fill_line_r;
+    logic [LINE_WIDTH-1:0] fill_line_next;
 
-    assign valid     = (state != S_IDLE);
-    assign completed = (state == S_DONE);
+    logic miss_valid_r;
+    logic refill_wen_r;
 
-    assign issue_word_id = word_id + issue_count[WORD_OFFSET_W-1:0];
-    assign recv_word_id  = word_id + recv_count[WORD_OFFSET_W-1:0];
+    assign valid         = (state != S_IDLE);
+    assign issue_pending = (state == S_ISSUE_R);
 
-    assign req_valid   = (state == S_ISSUE);
-    assign req_write   = 1'b0;
-    assign req_wdata   = '0;
-    assign req_mshr_id = mshr_id;
+    assign issue_word_id = miss_word_id_r + issue_count[WORD_OFFSET_W-1:0];
+    assign recv_word_id  = miss_word_id_r + recv_count [WORD_OFFSET_W-1:0];
 
-    assign req_addr = {{(ADDR_WIDTH-LINE_ADDR_WIDTH-WORD_OFFSET_W){1'b0}},
-                       line_addr,
-                       issue_word_id};
+    assign word_id       = issue_word_id;
+
+    assign fill_line     = fill_line_r;
+    assign miss_valid    = miss_valid_r;
+    assign miss_id       = cpu_req_id;
+    assign refill_wen    = refill_wen_r;
+
+    assign beat_data =
+        (dirty && (recv_word_id == miss_word_id_r)) ? alloc_wdata : resp_data;
 
     always_comb begin
-        fill_word_data = complete_word_data;
-
-        if (write && (recv_word_id == word_id)) begin
-            fill_word_data = wdata;
-        end
+        fill_line_next = fill_line_r;
+        fill_line_next[recv_word_id * DATA_WIDTH +: DATA_WIDTH] = beat_data;
     end
 
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
-            state       <= S_IDLE;
-
-            line_addr   <= '0;
-            set_id      <= '0;
-            word_id     <= '0;
-            tag         <= '0;
-            way         <= '0;
-
-            write       <= 1'b0;
-            wdata       <= '0;
-
-            cpu_req_id  <= '0;
-            mshr_id     <= '0;
-
-            issue_count <= '0;
-            recv_count  <= '0;
-            fill_line   <= '0;
+            state        <= S_IDLE;
+            issue_count  <= '0;
+            recv_count   <= '0;
+            miss_valid_r <= 1'b0;
+            refill_wen_r <= 1'b0;
         end
         else begin
+            miss_valid_r <= 1'b0;
+            refill_wen_r <= 1'b0;
+
             case (state)
 
                 S_IDLE: begin
                     if (alloc) begin
-                        line_addr   <= alloc_line_addr;
-                        set_id      <= alloc_set_id;
-                        word_id     <= alloc_word_id;
-                        tag         <= alloc_tag;
-                        way         <= alloc_way;
+                        line_addr      <= alloc_line_addr;
+                        set_id         <= alloc_set_id;
+                        miss_word_id_r <= alloc_word_id;
+                        tag            <= alloc_tag;
+                        way            <= alloc_way;
 
-                        write       <= alloc_write;
-                        wdata       <= alloc_wdata;
+                        dirty          <= alloc_write;
 
-                        cpu_req_id  <= alloc_cpu_req_id;
-                        mshr_id     <= alloc_mshr_id;
+                        cpu_req_id     <= alloc_cpu_req_id;
+                        mshr_id        <= alloc_mshr_id;
 
-                        issue_count <= '0;
-                        recv_count  <= '0;
-                        fill_line   <= '0;
+                        issue_count    <= '0;
+                        recv_count     <= '0;
+                        fill_line_r    <= '0;
 
-                        state       <= S_ISSUE;
+                        state          <= S_ISSUE_R;
                     end
                 end
 
-                S_ISSUE: begin
-                    if (issued) begin
+                S_ISSUE_R: begin
+                    if (issue_done) begin
                         if (issue_count == WORDS_PER_LINE-1) begin
                             issue_count <= '0;
                             state       <= S_WAIT_R;
@@ -165,12 +156,17 @@ module MSHR_Entry #(
                 end
 
                 S_WAIT_R: begin
-                    if (complete) begin
-                        fill_line[recv_word_id * DATA_WIDTH +: DATA_WIDTH] <= fill_word_data;
+                    if (resp_valid) begin
+                        fill_line_r <= fill_line_next;
+
+                        if (recv_count == '0) begin
+                            miss_valid_r <= 1'b1;
+                        end
 
                         if (recv_count == WORDS_PER_LINE-1) begin
-                            recv_count <= '0;
-                            state      <= S_DONE;
+                            recv_count   <= '0;
+                            refill_wen_r <= 1'b1;
+                            state        <= S_REFILL;
                         end
                         else begin
                             recv_count <= recv_count + 1'b1;
@@ -178,12 +174,8 @@ module MSHR_Entry #(
                     end
                 end
 
-                S_DONE: begin
-                    if (free) begin
-                        state       <= S_IDLE;
-                        issue_count <= '0;
-                        recv_count  <= '0;
-                    end
+                S_REFILL: begin
+                    state <= S_IDLE;
                 end
 
                 default: begin
