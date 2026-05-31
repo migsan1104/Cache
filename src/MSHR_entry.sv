@@ -1,13 +1,12 @@
 // ============================================================
 // Single MSHR entry
-// Owns miss metadata, issues refill requests,
-// receives its own demuxed response beats,
-// assembles full refill line,
-// pulses miss_valid for the critical word,
-// and pulses refill_wen once when the full line is ready.
+// Owns miss metadata, optional dirty-victim writeback,
+// refill request issue, response collection, critical-word pulse,
+// and full-line refill write pulse.
 // ============================================================
 
 module MSHR_Entry #(
+    parameter int ADDR_WIDTH      = 32,
     parameter int LINE_ADDR_WIDTH = 16,
     parameter int SET_INDEX_W     = 4,
     parameter int WORD_OFFSET_W   = 2,
@@ -35,6 +34,11 @@ module MSHR_Entry #(
     input  logic [CPU_ID_WIDTH-1:0]    alloc_cpu_req_id,
     input  logic [MSHR_ID_WIDTH-1:0]   alloc_mshr_id,
 
+    input  logic                       alloc_victim_valid,
+    input  logic                       alloc_victim_dirty,
+    input  logic [TAG_WIDTH-1:0]       alloc_victim_tag,
+    input  logic [LINE_WIDTH-1:0]      alloc_victim_line,
+
     input  logic                       issue_done,
 
     input  logic                       resp_valid,
@@ -42,6 +46,12 @@ module MSHR_Entry #(
 
     output logic                       valid,
     output logic                       issue_pending,
+
+    output logic                       req_valid,
+    output logic                       req_write,
+    output logic [ADDR_WIDTH-1:0]      req_addr,
+    output logic [DATA_WIDTH-1:0]      req_wdata,
+    output logic [MSHR_ID_WIDTH-1:0]   req_mshr_id,
 
     output logic [LINE_ADDR_WIDTH-1:0] line_addr,
     output logic [SET_INDEX_W-1:0]     set_id,
@@ -64,8 +74,9 @@ module MSHR_Entry #(
     localparam int WORDS_PER_LINE = LINE_WIDTH / DATA_WIDTH;
     localparam int BEAT_COUNT_W   = (WORDS_PER_LINE <= 1) ? 1 : $clog2(WORDS_PER_LINE);
 
-    typedef enum logic [1:0] {
+    typedef enum logic [2:0] {
         S_IDLE,
+        S_ISSUE_W,
         S_ISSUE_R,
         S_WAIT_R,
         S_REFILL
@@ -73,12 +84,23 @@ module MSHR_Entry #(
 
     state_t state;
 
+    logic [BEAT_COUNT_W-1:0] wb_count;
     logic [BEAT_COUNT_W-1:0] issue_count;
     logic [BEAT_COUNT_W-1:0] recv_count;
 
     logic [WORD_OFFSET_W-1:0] miss_word_id_r;
+    logic [WORD_OFFSET_W-1:0] wb_word_id;
     logic [WORD_OFFSET_W-1:0] issue_word_id;
     logic [WORD_OFFSET_W-1:0] recv_word_id;
+
+    logic write_r;
+    logic [DATA_WIDTH-1:0] wdata_r;
+
+    logic victim_valid_r;
+    logic victim_dirty_r;
+    logic [TAG_WIDTH-1:0]  victim_tag_r;
+    logic [LINE_WIDTH-1:0] victim_line_r;
+    logic [LINE_ADDR_WIDTH-1:0] victim_line_addr;
 
     logic [DATA_WIDTH-1:0] beat_data;
     logic [LINE_WIDTH-1:0] fill_line_r;
@@ -88,20 +110,42 @@ module MSHR_Entry #(
     logic refill_wen_r;
 
     assign valid         = (state != S_IDLE);
-    assign issue_pending = (state == S_ISSUE_R);
+    assign issue_pending = (state == S_ISSUE_W) || (state == S_ISSUE_R);
 
+    assign wb_word_id    = wb_count[WORD_OFFSET_W-1:0];
     assign issue_word_id = miss_word_id_r + issue_count[WORD_OFFSET_W-1:0];
     assign recv_word_id  = miss_word_id_r + recv_count [WORD_OFFSET_W-1:0];
 
-    assign word_id       = issue_word_id;
+    assign victim_line_addr = {victim_tag_r, set_id};
 
-    assign fill_line     = fill_line_r;
-    assign miss_valid    = miss_valid_r;
-    assign miss_id       = cpu_req_id;
-    assign refill_wen    = refill_wen_r;
+    assign word_id    = issue_word_id;
+    assign fill_line  = fill_line_r;
+    assign miss_valid = miss_valid_r;
+    assign miss_id    = cpu_req_id;
+    assign refill_wen = refill_wen_r;
+
+    assign dirty = write_r;
+
+    assign req_valid   = (state == S_ISSUE_W) || (state == S_ISSUE_R);
+    assign req_write   = (state == S_ISSUE_W);
+    assign req_mshr_id = mshr_id;
+
+    assign req_addr =
+        (state == S_ISSUE_W)
+        ? {{(ADDR_WIDTH-LINE_ADDR_WIDTH-WORD_OFFSET_W){1'b0}},
+           victim_line_addr,
+           wb_word_id}
+        : {{(ADDR_WIDTH-LINE_ADDR_WIDTH-WORD_OFFSET_W){1'b0}},
+           line_addr,
+           issue_word_id};
+
+    assign req_wdata =
+        (state == S_ISSUE_W)
+        ? victim_line_r[wb_word_id * DATA_WIDTH +: DATA_WIDTH]
+        : '0;
 
     assign beat_data =
-        (dirty && (recv_word_id == miss_word_id_r)) ? alloc_wdata : resp_data;
+        (write_r && (recv_word_id == miss_word_id_r)) ? wdata_r : resp_data;
 
     always_comb begin
         fill_line_next = fill_line_r;
@@ -111,6 +155,7 @@ module MSHR_Entry #(
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
             state        <= S_IDLE;
+            wb_count     <= '0;
             issue_count  <= '0;
             recv_count   <= '0;
             miss_valid_r <= 1'b0;
@@ -130,16 +175,40 @@ module MSHR_Entry #(
                         tag            <= alloc_tag;
                         way            <= alloc_way;
 
-                        dirty          <= alloc_write;
+                        write_r        <= alloc_write;
+                        wdata_r        <= alloc_wdata;
 
                         cpu_req_id     <= alloc_cpu_req_id;
                         mshr_id        <= alloc_mshr_id;
 
+                        victim_valid_r <= alloc_victim_valid;
+                        victim_dirty_r <= alloc_victim_dirty;
+                        victim_tag_r   <= alloc_victim_tag;
+                        victim_line_r  <= alloc_victim_line;
+
+                        wb_count       <= '0;
                         issue_count    <= '0;
                         recv_count     <= '0;
                         fill_line_r    <= '0;
 
-                        state          <= S_ISSUE_R;
+                        if (alloc_victim_valid && alloc_victim_dirty) begin
+                            state <= S_ISSUE_W;
+                        end
+                        else begin
+                            state <= S_ISSUE_R;
+                        end
+                    end
+                end
+
+                S_ISSUE_W: begin
+                    if (issue_done) begin
+                        if (wb_count == WORDS_PER_LINE-1) begin
+                            wb_count <= '0;
+                            state    <= S_ISSUE_R;
+                        end
+                        else begin
+                            wb_count <= wb_count + 1'b1;
+                        end
                     end
                 end
 

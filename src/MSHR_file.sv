@@ -1,13 +1,6 @@
 // ============================================================
 // 4-entry MSHR file with internal absorption FIFO
-//
-// Responsibilities:
-// - Absorb frontend misses into FIFO
-// - Allocate free MSHR entries
-// - Demux memory response valid into the selected MSHR
-// - Mux MSHR miss response ID metadata
-// - Mux full-line refill writes into cache write side
-// - Expose MSHR request outputs to MSHR_Request_Arbiter
+// Includes victim metadata for dirty eviction/writeback
 // ============================================================
 
 module MSHR_File #(
@@ -39,10 +32,14 @@ module MSHR_File #(
     input  logic [DATA_WIDTH-1:0]      alloc_wdata,
     input  logic [CPU_ID_WIDTH-1:0]    alloc_cpu_req_id,
 
+    input  logic                       alloc_victim_valid,
+    input  logic                       alloc_victim_dirty,
+    input  logic [TAG_WIDTH-1:0]       alloc_victim_tag,
+    input  logic [LINE_WIDTH-1:0]      alloc_victim_line,
+
     output logic [MSHR_ID_WIDTH-1:0]   alloc_mshr_id,
 
-    input  logic                       issue_done_valid,
-    input  logic [MSHR_ID_WIDTH-1:0]   issue_done_mshr_id,
+    input  logic [3:0]                 issue_done,
 
     input  logic                       mem_resp_valid,
     input  logic [MSHR_ID_WIDTH-1:0]   mem_resp_id,
@@ -83,6 +80,11 @@ module MSHR_File #(
         logic                       write;
         logic [DATA_WIDTH-1:0]      wdata;
         logic [CPU_ID_WIDTH-1:0]    cpu_req_id;
+
+        logic                       victim_valid;
+        logic                       victim_dirty;
+        logic [TAG_WIDTH-1:0]       victim_tag;
+        logic [LINE_WIDTH-1:0]      victim_line;
     } missq_entry_t;
 
     localparam int MISSQ_WIDTH = $bits(missq_entry_t);
@@ -122,7 +124,6 @@ module MSHR_File #(
     logic [LINE_WIDTH-1:0]      entry_fill_line  [MSHR_COUNT];
 
     logic [MSHR_COUNT-1:0]      entry_alloc_onehot;
-    logic [MSHR_COUNT-1:0]      issue_done_onehot;
     logic [MSHR_COUNT-1:0]      mshr_resp_valid;
 
     logic [DATA_WIDTH-1:0]      mshr_resp_data;
@@ -133,14 +134,19 @@ module MSHR_File #(
 
     logic miss_valid_raw;
 
-    assign missq_wentry.line_addr  = alloc_line_addr;
-    assign missq_wentry.set_id     = alloc_set_id;
-    assign missq_wentry.word_id    = alloc_word_id;
-    assign missq_wentry.tag        = alloc_tag;
-    assign missq_wentry.way        = alloc_way;
-    assign missq_wentry.write      = alloc_write;
-    assign missq_wentry.wdata      = alloc_wdata;
-    assign missq_wentry.cpu_req_id = alloc_cpu_req_id;
+    assign missq_wentry.line_addr     = alloc_line_addr;
+    assign missq_wentry.set_id        = alloc_set_id;
+    assign missq_wentry.word_id       = alloc_word_id;
+    assign missq_wentry.tag           = alloc_tag;
+    assign missq_wentry.way           = alloc_way;
+    assign missq_wentry.write         = alloc_write;
+    assign missq_wentry.wdata         = alloc_wdata;
+    assign missq_wentry.cpu_req_id    = alloc_cpu_req_id;
+
+    assign missq_wentry.victim_valid  = alloc_victim_valid;
+    assign missq_wentry.victim_dirty  = alloc_victim_dirty;
+    assign missq_wentry.victim_tag    = alloc_victim_tag;
+    assign missq_wentry.victim_line   = alloc_victim_line;
 
     assign missq_wdata  = missq_wentry;
     assign missq_rentry = missq_rdata;
@@ -216,14 +222,6 @@ module MSHR_File #(
     end
 
     assign alloc_mshr_id = entry_alloc_idx;
-
-    always_comb begin
-        issue_done_onehot = '0;
-
-        if (issue_done_valid) begin
-            issue_done_onehot[issue_done_mshr_id] = 1'b1;
-        end
-    end
 
     MSHR_Response_DeMux #(
         .MSHR_COUNT   (MSHR_COUNT),
@@ -313,50 +311,58 @@ module MSHR_File #(
                 .CPU_ID_WIDTH   (CPU_ID_WIDTH),
                 .MSHR_ID_WIDTH  (MSHR_ID_WIDTH)
             ) ENTRY (
-                .clk              (clk),
-                .rst              (rst),
+                .clk                (clk),
+                .rst                (rst),
 
-                .alloc            (entry_alloc_fire && entry_alloc_onehot[i]),
-                .alloc_line_addr  (dispatch_entry_r.line_addr),
-                .alloc_set_id     (dispatch_entry_r.set_id),
-                .alloc_word_id    (dispatch_entry_r.word_id),
-                .alloc_tag        (dispatch_entry_r.tag),
-                .alloc_way        (dispatch_entry_r.way),
-                .alloc_write      (dispatch_entry_r.write),
-                .alloc_wdata      (dispatch_entry_r.wdata),
-                .alloc_cpu_req_id (dispatch_entry_r.cpu_req_id),
-                .alloc_mshr_id    (i[MSHR_ID_WIDTH-1:0]),
+                .alloc              (entry_alloc_fire && entry_alloc_onehot[i]),
 
-                .issue_done       (issue_done_onehot[i]),
+                .alloc_line_addr    (dispatch_entry_r.line_addr),
+                .alloc_set_id       (dispatch_entry_r.set_id),
+                .alloc_word_id      (dispatch_entry_r.word_id),
+                .alloc_tag          (dispatch_entry_r.tag),
+                .alloc_way          (dispatch_entry_r.way),
 
-                .resp_valid       (mshr_resp_valid[i]),
-                .resp_data        (mshr_resp_data),
+                .alloc_write        (dispatch_entry_r.write),
+                .alloc_wdata        (dispatch_entry_r.wdata),
 
-                .valid            (entry_valid[i]),
-                .issue_pending    (entry_issue_pending[i]),
+                .alloc_cpu_req_id   (dispatch_entry_r.cpu_req_id),
+                .alloc_mshr_id      (i[MSHR_ID_WIDTH-1:0]),
 
-                .req_valid        (req_valid[i]),
-                .req_write        (req_write[i]),
-                .req_addr         (req_addr[i]),
-                .req_wdata        (req_wdata[i]),
-                .req_mshr_id      (req_id[i]),
+                .alloc_victim_valid (dispatch_entry_r.victim_valid),
+                .alloc_victim_dirty (dispatch_entry_r.victim_dirty),
+                .alloc_victim_tag   (dispatch_entry_r.victim_tag),
+                .alloc_victim_line  (dispatch_entry_r.victim_line),
 
-                .line_addr        (entry_line_addr[i]),
-                .set_id           (entry_set_id[i]),
-                .word_id          (entry_word_id[i]),
-                .tag              (entry_tag[i]),
-                .way              (entry_way[i]),
+                .issue_done         (issue_done[i]),
 
-                .dirty            (entry_dirty[i]),
+                .resp_valid         (mshr_resp_valid[i]),
+                .resp_data          (mshr_resp_data),
 
-                .cpu_req_id       (entry_cpu_req_id[i]),
-                .mshr_id          (entry_mshr_id[i]),
+                .valid              (entry_valid[i]),
+                .issue_pending      (entry_issue_pending[i]),
 
-                .miss_valid       (entry_miss_valid[i]),
-                .miss_id          (entry_miss_id[i]),
+                .req_valid          (req_valid[i]),
+                .req_write          (req_write[i]),
+                .req_addr           (req_addr[i]),
+                .req_wdata          (req_wdata[i]),
+                .req_mshr_id        (req_id[i]),
 
-                .refill_wen       (entry_refill_wen[i]),
-                .fill_line        (entry_fill_line[i])
+                .line_addr          (entry_line_addr[i]),
+                .set_id             (entry_set_id[i]),
+                .word_id            (entry_word_id[i]),
+                .tag                (entry_tag[i]),
+                .way                (entry_way[i]),
+
+                .dirty              (entry_dirty[i]),
+
+                .cpu_req_id         (entry_cpu_req_id[i]),
+                .mshr_id            (entry_mshr_id[i]),
+
+                .miss_valid         (entry_miss_valid[i]),
+                .miss_id            (entry_miss_id[i]),
+
+                .refill_wen         (entry_refill_wen[i]),
+                .fill_line          (entry_fill_line[i])
             );
 
         end
