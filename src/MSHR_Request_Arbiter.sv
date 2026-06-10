@@ -34,7 +34,6 @@ module MSHR_Request_Arbiter #(
     logic [ADDR_WIDTH-1:0]        out_addr_r;
     logic [DATA_WIDTH-1:0]        out_wdata_r;
     logic [MSHR_ID_WIDTH-1:0]     out_id_r;
-    logic [MSHR_COUNT-1:0]        out_owner_onehot_r;
 
     logic                         found_req;
     logic                         load_new;
@@ -50,7 +49,9 @@ module MSHR_Request_Arbiter #(
     assign mem_req_wdata = out_wdata_r;
     assign mem_req_id    = out_id_r;
 
-    assign issued = (out_valid_r && mem_req_ready) ? out_owner_onehot_r : '0;
+    assign load_new = !out_valid_r || mem_req_ready;
+
+    assign issued = (load_new && found_req) ? selected_onehot : '0;
 
     always_comb begin
         found_req        = 1'b0;
@@ -62,44 +63,39 @@ module MSHR_Request_Arbiter #(
 
         for (int i = 0; i < MSHR_COUNT; i++) begin
             if (req_valid[i] && !found_req) begin
-                found_req               = 1'b1;
-                selected_onehot[i]      = 1'b1;
-                selected_write          = req_write[i];
-                selected_addr           = req_addr[i];
-                selected_wdata          = req_wdata[i];
-                selected_id             = req_id[i];
+                found_req          = 1'b1;
+                selected_onehot[i] = 1'b1;
+                selected_write     = req_write[i];
+                selected_addr      = req_addr[i];
+                selected_wdata     = req_wdata[i];
+                selected_id        = req_id[i];
             end
         end
     end
 
-    assign load_new = !out_valid_r || mem_req_ready;
-
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
-            out_valid_r        <= 1'b0;
-            out_write_r        <= 1'b0;
-            out_addr_r         <= '0;
-            out_wdata_r        <= '0;
-            out_id_r           <= '0;
-            out_owner_onehot_r <= '0;
+            out_valid_r <= 1'b0;
+            out_write_r <= 1'b0;
+            out_addr_r  <= '0;
+            out_wdata_r <= '0;
+            out_id_r    <= '0;
         end
         else begin
             if (load_new) begin
                 if (found_req) begin
-                    out_valid_r        <= 1'b1;
-                    out_write_r        <= selected_write;
-                    out_addr_r         <= selected_addr;
-                    out_wdata_r        <= selected_wdata;
-                    out_id_r           <= selected_id;
-                    out_owner_onehot_r <= selected_onehot;
+                    out_valid_r <= 1'b1;
+                    out_write_r <= selected_write;
+                    out_addr_r  <= selected_addr;
+                    out_wdata_r <= selected_wdata;
+                    out_id_r    <= selected_id;
                 end
                 else begin
-                    out_valid_r        <= 1'b0;
-                    out_write_r        <= 1'b0;
-                    out_addr_r         <= '0;
-                    out_wdata_r        <= '0;
-                    out_id_r           <= '0;
-                    out_owner_onehot_r <= '0;
+                    out_valid_r <= 1'b0;
+                    out_write_r <= 1'b0;
+                    out_addr_r  <= '0;
+                    out_wdata_r <= '0;
+                    out_id_r    <= '0;
                 end
             end
         end

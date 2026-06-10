@@ -23,7 +23,7 @@ module FIFO #(
     logic [ADDR_WIDTH-1:0] rd_addr_r;
 
     always_ff @(posedge clk) begin
-        if (valid_wr) begin
+        if (wr_en) begin
             ram[wr_addr_r[ADDR_WIDTH-2:0]] <= wr_data;
         end
 
@@ -39,7 +39,7 @@ module FIFO #(
         else begin
             rd_valid <= rd_en;
 
-            if (we_en) begin
+            if (wr_en) begin
                 wr_addr_r <= wr_addr_r + 1'b1;
             end
 

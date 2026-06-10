@@ -1,8 +1,6 @@
 // ============================================================
-// Single MSHR entry
-// Owns miss metadata, optional dirty-victim writeback,
-// refill request issue, response collection, critical-word pulse,
-// and full-line refill write pulse.
+// Single MSHR entry - two-process FSM
+// Write miss fetches only other 3 words.
 // ============================================================
 
 module MSHR_Entry #(
@@ -77,56 +75,84 @@ module MSHR_Entry #(
     typedef enum logic [2:0] {
         S_IDLE,
         S_ISSUE_W,
-        S_ISSUE_R,
-        S_WAIT_R,
+        S_ISSUE_R_R,
+        S_ISSUE_R_W,
+        S_WAIT_R_R,
+        S_WAIT_R_W,
         S_REFILL
     } state_t;
 
-    state_t state;
+    state_t state, state_n;
 
-    logic [BEAT_COUNT_W-1:0] wb_count;
-    logic [BEAT_COUNT_W-1:0] issue_count;
-    logic [BEAT_COUNT_W-1:0] recv_count;
+    logic [BEAT_COUNT_W-1:0] wb_count, wb_count_n;
+    logic [BEAT_COUNT_W-1:0] issue_count, issue_count_n;
+    logic [BEAT_COUNT_W-1:0] recv_count, recv_count_n;
 
-    logic [WORD_OFFSET_W-1:0] miss_word_id_r;
+    logic [WORD_OFFSET_W-1:0] miss_word_id_r, miss_word_id_n;
     logic [WORD_OFFSET_W-1:0] wb_word_id;
-    logic [WORD_OFFSET_W-1:0] issue_word_id;
-    logic [WORD_OFFSET_W-1:0] recv_word_id;
+    logic [WORD_OFFSET_W-1:0] read_issue_word_id;
+    logic [WORD_OFFSET_W-1:0] write_issue_word_id;
+    logic [WORD_OFFSET_W-1:0] read_recv_word_id;
+    logic [WORD_OFFSET_W-1:0] write_recv_word_id;
+    logic [WORD_OFFSET_W-1:0] active_issue_word_id;
+    logic [WORD_OFFSET_W-1:0] active_recv_word_id;
 
-    logic write_r;
-    logic [DATA_WIDTH-1:0] wdata_r;
+    logic write_r, write_n;
+    logic [DATA_WIDTH-1:0] wdata_r, wdata_n;
 
-    logic victim_valid_r;
-    logic victim_dirty_r;
-    logic [TAG_WIDTH-1:0]  victim_tag_r;
-    logic [LINE_WIDTH-1:0] victim_line_r;
+    logic victim_valid_r, victim_valid_n;
+    logic victim_dirty_r, victim_dirty_n;
+    logic [TAG_WIDTH-1:0]  victim_tag_r, victim_tag_n;
+    logic [LINE_WIDTH-1:0] victim_line_r, victim_line_n;
     logic [LINE_ADDR_WIDTH-1:0] victim_line_addr;
 
-    logic [DATA_WIDTH-1:0] beat_data;
-    logic [LINE_WIDTH-1:0] fill_line_r;
-    logic [LINE_WIDTH-1:0] fill_line_next;
+    logic [LINE_ADDR_WIDTH-1:0] line_addr_n;
+    logic [SET_INDEX_W-1:0]     set_id_n;
+    logic [TAG_WIDTH-1:0]       tag_n;
+    logic [WAY_INDEX_W-1:0]     way_n;
+    logic [CPU_ID_WIDTH-1:0]    cpu_req_id_n;
+    logic [MSHR_ID_WIDTH-1:0]   mshr_id_n;
 
-    logic miss_valid_r;
-    logic refill_wen_r;
+    logic [LINE_WIDTH-1:0] fill_line_r, fill_line_n;
 
-    assign valid         = (state != S_IDLE);
-    assign issue_pending = (state == S_ISSUE_W) || (state == S_ISSUE_R);
+    logic miss_valid_r, miss_valid_n;
+    logic refill_wen_r, refill_wen_n;
 
-    assign wb_word_id    = wb_count[WORD_OFFSET_W-1:0];
-    assign issue_word_id = miss_word_id_r + issue_count[WORD_OFFSET_W-1:0];
-    assign recv_word_id  = miss_word_id_r + recv_count [WORD_OFFSET_W-1:0];
+    assign wb_word_id = wb_count[WORD_OFFSET_W-1:0];
+
+    assign read_issue_word_id = issue_count[WORD_OFFSET_W-1:0];
+    assign read_recv_word_id  = recv_count [WORD_OFFSET_W-1:0];
+
+    assign write_issue_word_id =
+        (issue_count[WORD_OFFSET_W-1:0] >= miss_word_id_r)
+        ? issue_count[WORD_OFFSET_W-1:0] + 1'b1
+        : issue_count[WORD_OFFSET_W-1:0];
+
+    assign write_recv_word_id =
+        (recv_count[WORD_OFFSET_W-1:0] >= miss_word_id_r)
+        ? recv_count[WORD_OFFSET_W-1:0] + 1'b1
+        : recv_count[WORD_OFFSET_W-1:0];
+
+    assign active_issue_word_id =
+        (state == S_ISSUE_R_W) ? write_issue_word_id : read_issue_word_id;
+
+    assign active_recv_word_id =
+        (state == S_WAIT_R_W) ? write_recv_word_id : read_recv_word_id;
 
     assign victim_line_addr = {victim_tag_r, set_id};
 
-    assign word_id    = issue_word_id;
-    assign fill_line  = fill_line_r;
-    assign miss_valid = miss_valid_r;
-    assign miss_id    = cpu_req_id;
-    assign refill_wen = refill_wen_r;
+    assign valid = (state != S_IDLE);
 
-    assign dirty = write_r;
+    assign issue_pending =
+        (state == S_ISSUE_W)   ||
+        (state == S_ISSUE_R_R) ||
+        (state == S_ISSUE_R_W);
 
-    assign req_valid   = (state == S_ISSUE_W) || (state == S_ISSUE_R);
+    assign req_valid =
+        (state == S_ISSUE_W)   ||
+        (state == S_ISSUE_R_R) ||
+        (state == S_ISSUE_R_W);
+
     assign req_write   = (state == S_ISSUE_W);
     assign req_mshr_id = mshr_id;
 
@@ -137,121 +163,229 @@ module MSHR_Entry #(
            wb_word_id}
         : {{(ADDR_WIDTH-LINE_ADDR_WIDTH-WORD_OFFSET_W){1'b0}},
            line_addr,
-           issue_word_id};
+           active_issue_word_id};
 
     assign req_wdata =
         (state == S_ISSUE_W)
         ? victim_line_r[wb_word_id * DATA_WIDTH +: DATA_WIDTH]
         : '0;
 
-    assign beat_data =
-        (write_r && (recv_word_id == miss_word_id_r)) ? wdata_r : resp_data;
+    assign word_id    = active_issue_word_id;
+    assign dirty      = write_r;
+    assign fill_line  = fill_line_r;
+    assign miss_valid = miss_valid_r;
+    assign miss_id    = cpu_req_id;
+    assign refill_wen = refill_wen_r;
 
     always_comb begin
-        fill_line_next = fill_line_r;
-        fill_line_next[recv_word_id * DATA_WIDTH +: DATA_WIDTH] = beat_data;
+        state_n        = state;
+
+        wb_count_n     = wb_count;
+        issue_count_n  = issue_count;
+        recv_count_n   = recv_count;
+
+        line_addr_n    = line_addr;
+        set_id_n       = set_id;
+        miss_word_id_n = miss_word_id_r;
+        tag_n          = tag;
+        way_n          = way;
+
+        write_n        = write_r;
+        wdata_n        = wdata_r;
+
+        cpu_req_id_n   = cpu_req_id;
+        mshr_id_n      = mshr_id;
+
+        victim_valid_n = victim_valid_r;
+        victim_dirty_n = victim_dirty_r;
+        victim_tag_n   = victim_tag_r;
+        victim_line_n  = victim_line_r;
+
+        fill_line_n    = fill_line_r;
+
+        miss_valid_n   = 1'b0;
+        refill_wen_n   = 1'b0;
+
+        case (state)
+
+            S_IDLE: begin
+                if (alloc) begin
+                    line_addr_n    = alloc_line_addr;
+                    set_id_n       = alloc_set_id;
+                    miss_word_id_n = alloc_word_id;
+                    tag_n          = alloc_tag;
+                    way_n          = alloc_way;
+
+                    write_n        = alloc_write;
+                    wdata_n        = alloc_wdata;
+
+                    cpu_req_id_n   = alloc_cpu_req_id;
+                    mshr_id_n      = alloc_mshr_id;
+
+                    victim_valid_n = alloc_victim_valid;
+                    victim_dirty_n = alloc_victim_dirty;
+                    victim_tag_n   = alloc_victim_tag;
+                    victim_line_n  = alloc_victim_line;
+
+                    wb_count_n     = '0;
+                    issue_count_n  = '0;
+                    recv_count_n   = '0;
+                    fill_line_n    = '0;
+
+                    if (alloc_write) begin
+                        fill_line_n[alloc_word_id * DATA_WIDTH +: DATA_WIDTH] = alloc_wdata;
+                    end
+
+                    if (alloc_victim_valid && alloc_victim_dirty)
+                        state_n = S_ISSUE_W;
+                    else if (alloc_write)
+                        state_n = S_ISSUE_R_W;
+                    else
+                        state_n = S_ISSUE_R_R;
+                end
+            end
+
+            S_ISSUE_W: begin
+                if (issue_done) begin
+                    if (wb_count == WORDS_PER_LINE-1) begin
+                        wb_count_n = '0;
+                        state_n    = write_r ? S_ISSUE_R_W : S_ISSUE_R_R;
+                    end
+                    else begin
+                        wb_count_n = wb_count + 1'b1;
+                    end
+                end
+            end
+
+            S_ISSUE_R_R: begin
+                if (issue_done) begin
+                    if (issue_count == WORDS_PER_LINE-1) begin
+                        issue_count_n = '0;
+                        state_n       = S_WAIT_R_R;
+                    end
+                    else begin
+                        issue_count_n = issue_count + 1'b1;
+                    end
+                end
+            end
+
+            S_ISSUE_R_W: begin
+                if (issue_done) begin
+                    if (issue_count == WORDS_PER_LINE-2) begin
+                        issue_count_n = '0;
+                        state_n       = S_WAIT_R_W;
+                    end
+                    else begin
+                        issue_count_n = issue_count + 1'b1;
+                    end
+                end
+            end
+
+            S_WAIT_R_R: begin
+                if (resp_valid) begin
+                    fill_line_n[active_recv_word_id * DATA_WIDTH +: DATA_WIDTH] = resp_data;
+
+                    if (recv_count == '0)
+                        miss_valid_n = 1'b1;
+
+                    if (recv_count == WORDS_PER_LINE-1) begin
+                        recv_count_n = '0;
+                        refill_wen_n = 1'b1;
+                        state_n      = S_REFILL;
+                    end
+                    else begin
+                        recv_count_n = recv_count + 1'b1;
+                    end
+                end
+            end
+
+            S_WAIT_R_W: begin
+                if (resp_valid) begin
+                    fill_line_n[active_recv_word_id * DATA_WIDTH +: DATA_WIDTH] = resp_data;
+
+                    if (recv_count == '0)
+                        miss_valid_n = 1'b1;
+
+                    if (recv_count == WORDS_PER_LINE-2) begin
+                        recv_count_n = '0;
+                        refill_wen_n = 1'b1;
+                        state_n      = S_REFILL;
+                    end
+                    else begin
+                        recv_count_n = recv_count + 1'b1;
+                    end
+                end
+            end
+
+            S_REFILL: begin
+                state_n = S_IDLE;
+            end
+
+            default: begin
+                state_n = S_IDLE;
+            end
+
+        endcase
     end
 
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
-            state        <= S_IDLE;
-            wb_count     <= '0;
-            issue_count  <= '0;
-            recv_count   <= '0;
-            miss_valid_r <= 1'b0;
-            refill_wen_r <= 1'b0;
+            state          <= S_IDLE;
+
+            wb_count       <= '0;
+            issue_count    <= '0;
+            recv_count     <= '0;
+
+            line_addr      <= '0;
+            set_id         <= '0;
+            miss_word_id_r <= '0;
+            tag            <= '0;
+            way            <= '0;
+
+            write_r        <= 1'b0;
+            wdata_r        <= '0;
+
+            cpu_req_id     <= '0;
+            mshr_id        <= '0;
+
+            victim_valid_r <= 1'b0;
+            victim_dirty_r <= 1'b0;
+            victim_tag_r   <= '0;
+            victim_line_r  <= '0;
+
+            fill_line_r    <= '0;
+
+            miss_valid_r   <= 1'b0;
+            refill_wen_r   <= 1'b0;
         end
         else begin
-            miss_valid_r <= 1'b0;
-            refill_wen_r <= 1'b0;
+            state          <= state_n;
 
-            case (state)
+            wb_count       <= wb_count_n;
+            issue_count    <= issue_count_n;
+            recv_count     <= recv_count_n;
 
-                S_IDLE: begin
-                    if (alloc) begin
-                        line_addr      <= alloc_line_addr;
-                        set_id         <= alloc_set_id;
-                        miss_word_id_r <= alloc_word_id;
-                        tag            <= alloc_tag;
-                        way            <= alloc_way;
+            line_addr      <= line_addr_n;
+            set_id         <= set_id_n;
+            miss_word_id_r <= miss_word_id_n;
+            tag            <= tag_n;
+            way            <= way_n;
 
-                        write_r        <= alloc_write;
-                        wdata_r        <= alloc_wdata;
+            write_r        <= write_n;
+            wdata_r        <= wdata_n;
 
-                        cpu_req_id     <= alloc_cpu_req_id;
-                        mshr_id        <= alloc_mshr_id;
+            cpu_req_id     <= cpu_req_id_n;
+            mshr_id        <= mshr_id_n;
 
-                        victim_valid_r <= alloc_victim_valid;
-                        victim_dirty_r <= alloc_victim_dirty;
-                        victim_tag_r   <= alloc_victim_tag;
-                        victim_line_r  <= alloc_victim_line;
+            victim_valid_r <= victim_valid_n;
+            victim_dirty_r <= victim_dirty_n;
+            victim_tag_r   <= victim_tag_n;
+            victim_line_r  <= victim_line_n;
 
-                        wb_count       <= '0;
-                        issue_count    <= '0;
-                        recv_count     <= '0;
-                        fill_line_r    <= '0;
+            fill_line_r    <= fill_line_n;
 
-                        if (alloc_victim_valid && alloc_victim_dirty) begin
-                            state <= S_ISSUE_W;
-                        end
-                        else begin
-                            state <= S_ISSUE_R;
-                        end
-                    end
-                end
-
-                S_ISSUE_W: begin
-                    if (issue_done) begin
-                        if (wb_count == WORDS_PER_LINE-1) begin
-                            wb_count <= '0;
-                            state    <= S_ISSUE_R;
-                        end
-                        else begin
-                            wb_count <= wb_count + 1'b1;
-                        end
-                    end
-                end
-
-                S_ISSUE_R: begin
-                    if (issue_done) begin
-                        if (issue_count == WORDS_PER_LINE-1) begin
-                            issue_count <= '0;
-                            state       <= S_WAIT_R;
-                        end
-                        else begin
-                            issue_count <= issue_count + 1'b1;
-                        end
-                    end
-                end
-
-                S_WAIT_R: begin
-                    if (resp_valid) begin
-                        fill_line_r <= fill_line_next;
-
-                        if (recv_count == '0) begin
-                            miss_valid_r <= 1'b1;
-                        end
-
-                        if (recv_count == WORDS_PER_LINE-1) begin
-                            recv_count   <= '0;
-                            refill_wen_r <= 1'b1;
-                            state        <= S_REFILL;
-                        end
-                        else begin
-                            recv_count <= recv_count + 1'b1;
-                        end
-                    end
-                end
-
-                S_REFILL: begin
-                    state <= S_IDLE;
-                end
-
-                default: begin
-                    state <= S_IDLE;
-                end
-
-            endcase
+            miss_valid_r   <= miss_valid_n;
+            refill_wen_r   <= refill_wen_n;
         end
     end
 

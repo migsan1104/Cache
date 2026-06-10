@@ -75,18 +75,10 @@ module Cache #(
     localparam int FLAG_VALID_BIT  = 0;
     localparam int FLAG_DIRTY_BIT  = 1;
 
-    // ============================================================
-    // Address decode wires
-    // ============================================================
-
     logic [TAG_WIDTH-1:0]       addr_tag;
     logic [SET_INDEX_W-1:0]     addr_set_id;
     logic [WORD_OFFSET_W-1:0]   addr_word_id;
     logic [LINE_ADDR_WIDTH-1:0] addr_line_addr;
-
-    // ============================================================
-    // Lookup stage registers
-    // ============================================================
 
     logic lookup_valid_r;
     logic lookup_write_r;
@@ -99,10 +91,6 @@ module Cache #(
     logic [WORD_OFFSET_W-1:0]   lookup_word_id_r;
     logic [LINE_ADDR_WIDTH-1:0] lookup_line_addr_r;
 
-    // ============================================================
-    // Compare stage registers
-    // ============================================================
-
     logic compare_valid_r;
     logic compare_write_r;
 
@@ -113,10 +101,6 @@ module Cache #(
     logic [SET_INDEX_W-1:0]     compare_set_id_r;
     logic [WORD_OFFSET_W-1:0]   compare_word_id_r;
     logic [LINE_ADDR_WIDTH-1:0] compare_line_addr_r;
-
-    // ============================================================
-    // Hit select stage registers
-    // ============================================================
 
     logic select_valid_r;
     logic select_write_r;
@@ -131,11 +115,6 @@ module Cache #(
     logic [SET_INDEX_W-1:0]     select_set_id_r;
     logic [WORD_OFFSET_W-1:0]   select_word_id_r;
     logic [LINE_ADDR_WIDTH-1:0] select_line_addr_r;
-
-    // ============================================================
-    // Miss select stage registers
-    // One-cycle pipelined miss bundle into MSHR_File absorption FIFO
-    // ============================================================
 
     logic miss_select_valid_r;
     logic miss_select_write_r;
@@ -153,10 +132,6 @@ module Cache #(
     logic                       miss_select_victim_dirty_r;
     logic [TAG_WIDTH-1:0]       miss_select_victim_tag_r;
     logic [LINE_WIDTH-1:0]      miss_select_victim_line_r;
-
-    // ============================================================
-    // Array write controls
-    // ============================================================
 
     logic [ASSOC-1:0] cpu_data_wen;
     logic [ASSOC-1:0] cpu_tag_wen;
@@ -178,10 +153,6 @@ module Cache #(
     logic [TAG_WIDTH-1:0]  refill_tag_wdata  [ASSOC];
     logic [FLAG_BITS-1:0]  refill_flag_wdata [ASSOC];
 
-    // ============================================================
-    // Array read data
-    // ============================================================
-
     logic [LINE_WIDTH-1:0] data_rline [ASSOC];
     logic [TAG_WIDTH-1:0]  tag_rdata  [ASSOC];
     logic [FLAG_BITS-1:0]  flag_rdata [ASSOC];
@@ -190,18 +161,10 @@ module Cache #(
     logic [TAG_WIDTH-1:0]  tag_rdata_r  [ASSOC];
     logic [FLAG_BITS-1:0]  flag_rdata_r [ASSOC];
 
-    // ============================================================
-    // Hit compare / hit select
-    // ============================================================
-
     logic [ASSOC-1:0]       way_hit;
     logic [DATA_WIDTH-1:0]  way_word [ASSOC];
     logic [WAY_INDEX_W-1:0] hit_way;
     logic [DATA_WIDTH-1:0]  selected_word;
-
-    // ============================================================
-    // Replacement / victim select
-    // ============================================================
 
     logic [ASSOC-1:0]       compare_valid_bits;
     logic [WAY_INDEX_W-1:0] victim_way;
@@ -212,10 +175,6 @@ module Cache #(
     logic [LINE_WIDTH-1:0]  victim_line;
 
     logic                   compare_miss;
-
-    // ============================================================
-    // MSHR / miss response
-    // ============================================================
 
     logic                         mshr_alloc_ready;
     logic [MSHR_ID_WIDTH-1:0]     mshr_alloc_id;
@@ -241,18 +200,10 @@ module Cache #(
     logic                         refill_dirty;
     logic [LINE_WIDTH-1:0]        refill_line;
 
-    // ============================================================
-    // Response unit
-    // ============================================================
-
     logic hit_resp_valid;
     logic miss_resp_valid;
     logic hit_resp_ready;
     logic miss_resp_ready;
-
-    // ============================================================
-    // Address decode
-    // ============================================================
 
     Address_Decode #(
         .ADDR_WIDTH (ADDR_WIDTH),
@@ -272,14 +223,7 @@ module Cache #(
     assign cpu_array_windex    = select_set_id_r;
     assign refill_array_windex = refill_set_id;
 
-    // Cache stalls only when:
-    // - hit response path cannot accept another hit
-    // - MSHR_File absorption FIFO is almost full
     assign cpu_req_ready = hit_resp_ready && mshr_alloc_ready;
-
-    // ============================================================
-    // Lookup pipeline register
-    // ============================================================
 
     always_ff @(posedge clk) begin
         if (rst) begin
@@ -305,11 +249,6 @@ module Cache #(
             lookup_line_addr_r  <= addr_line_addr;
         end
     end
-
-    // ============================================================
-    // Compare pipeline register
-    // Also snapshots all way read data for the compare/select stage.
-    // ============================================================
 
     always_ff @(posedge clk) begin
         if (rst) begin
@@ -347,10 +286,6 @@ module Cache #(
             end
         end
     end
-
-    // ============================================================
-    // Cache arrays
-    // ============================================================
 
     genvar way;
 
@@ -395,12 +330,13 @@ module Cache #(
                 .rdata  (tag_rdata[way])
             );
 
-            RAM_2W1R #(
+            RAM_2W1R_Reset #(
                 .D_WIDTH     (FLAG_BITS),
                 .DEPTH       (NUM_SETS),
                 .READ_LATENCY(READ_LATENCY)
             ) FLAG_ARRAY (
                 .clk    (clk),
+                .rst    (rst),
 
                 .wen_a  (cpu_flag_wen[way]),
                 .waddr_a(cpu_array_windex),
@@ -430,11 +366,6 @@ module Cache #(
 
         end
     endgenerate
-
-    // ============================================================
-    // Hit select path
-    // Compare -> hit select -> response
-    // ============================================================
 
     always_comb begin
         hit_way       = '0;
@@ -479,11 +410,6 @@ module Cache #(
         end
     end
 
-    // ============================================================
-    // Replacement / miss select path
-    // Compare -> replacement -> one-cycle MSHR allocation bundle
-    // ============================================================
-
     assign compare_miss = compare_valid_r && !(|way_hit);
 
     always_comb begin
@@ -505,9 +431,7 @@ module Cache #(
         .valid_bits  (compare_valid_bits),
         .victim_way  (victim_way),
 
-        // Simplified replacement update:
-        // update PLRU on miss allocation using the selected victim way.
-        .update_valid(compare_miss && cpu_req_ready),
+        .update_valid(compare_miss),
         .update_set  (compare_set_id_r),
         .update_way  (victim_way)
     );
@@ -555,12 +479,6 @@ module Cache #(
             miss_select_victim_line_r  <= victim_line;
         end
     end
-
-    // ============================================================
-    // MSHR file
-    // Allocates from one-cycle miss-select stage.
-    // MSHR_File has absorption FIFO; alloc_ready means FIFO has room.
-    // ============================================================
 
     MSHR_File #(
         .ADDR_WIDTH      (ADDR_WIDTH),
@@ -627,10 +545,6 @@ module Cache #(
         .empty               (mshr_empty)
     );
 
-    // ============================================================
-    // Miss response data alignment
-    // ============================================================
-
     Delay_r #(
         .D_WIDTH(DATA_WIDTH),
         .DELAY  (2)
@@ -640,10 +554,6 @@ module Cache #(
         .din (mem_resp_rdata),
         .dout(miss_cpu_resp_data)
     );
-
-    // ============================================================
-    // MSHR request arbiter
-    // ============================================================
 
     MSHR_Request_Arbiter #(
         .MSHR_COUNT   (MSHR_COUNT),
@@ -671,10 +581,6 @@ module Cache #(
     );
 
     assign mem_resp_ready = 1'b1;
-
-    // ============================================================
-    // Response unit
-    // ============================================================
 
     assign hit_resp_valid  = select_valid_r && select_hit_r;
     assign miss_resp_valid = miss_cpu_resp_valid;
@@ -704,10 +610,6 @@ module Cache #(
         .cpu_resp_id   (cpu_resp_id)
     );
 
-    // ============================================================
-    // Refill write control
-    // ============================================================
-
     Refill_Write_Control #(
         .ASSOC      (ASSOC),
         .LINE_WIDTH (LINE_WIDTH),
@@ -728,10 +630,6 @@ module Cache #(
         .tag_wdata   (refill_tag_wdata),
         .flag_wdata  (refill_flag_wdata)
     );
-
-    // ============================================================
-    // CPU write-hit control
-    // ============================================================
 
     CPU_Write_Hit_Control #(
         .ASSOC        (ASSOC),
