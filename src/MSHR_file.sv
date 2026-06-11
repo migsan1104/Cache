@@ -1,5 +1,5 @@
 // ============================================================
-// 4-entry MSHR file with internal absorption FIFO
+// 4-entry MSHR file with internal FWFT absorption FIFO
 // Includes victim metadata for dirty eviction/writeback
 // ============================================================
 
@@ -101,8 +101,6 @@ module MSHR_File #(
     logic missq_empty;
     logic missq_wr_en;
     logic missq_rd_en;
-    logic missq_rd_valid;
-    logic missq_read_pending;
 
     logic dispatch_valid_r;
 
@@ -161,33 +159,22 @@ module MSHR_File #(
     ) MISS_QUEUE (
         .clk        (clk),
         .rst        (rst),
+
         .full       (missq_full),
         .almost_full(missq_almost_full),
+
         .wr_en      (missq_wr_en),
         .wr_data    (missq_wdata),
+
         .empty      (missq_empty),
         .rd_en      (missq_rd_en),
-        .rd_valid   (missq_rd_valid),
         .rd_data    (missq_rdata)
     );
 
-    assign missq_rd_en = !missq_empty &&
-                         !dispatch_valid_r &&
-                         !missq_read_pending;
-
-    always_ff @(posedge clk or posedge rst) begin
-        if (rst) begin
-            missq_read_pending <= 1'b0;
-        end
-        else begin
-            if (missq_rd_en) begin
-                missq_read_pending <= 1'b1;
-            end
-            else if (missq_rd_valid) begin
-                missq_read_pending <= 1'b0;
-            end
-        end
-    end
+    // FWFT behavior:
+    // If FIFO is not empty, missq_rdata already holds the front entry.
+    // rd_en pops the currently visible entry.
+    assign missq_rd_en = !missq_empty && !dispatch_valid_r;
 
     assign entry_alloc_fire = dispatch_valid_r && entry_alloc_ready;
 
@@ -197,7 +184,7 @@ module MSHR_File #(
             dispatch_entry_r <= '0;
         end
         else begin
-            if (missq_rd_valid) begin
+            if (!dispatch_valid_r && !missq_empty) begin
                 dispatch_valid_r <= 1'b1;
                 dispatch_entry_r <= missq_rentry;
             end

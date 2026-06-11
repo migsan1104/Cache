@@ -4,20 +4,23 @@ module Basic_Test;
 
     localparam int ADDR_WIDTH       = 32;
     localparam int DATA_WIDTH       = 32;
-    localparam int CPU_ID_WIDTH     = 3;
+    localparam int CPU_ID_WIDTH     = 8;
     localparam int MSHR_ID_WIDTH    = 2;
 
     localparam int CACHE_BYTES      = 1024;
     localparam int LINE_BYTES       = 16;
     localparam int ASSOC            = 4;
 
+    localparam int WORDS_PER_LINE   = LINE_BYTES / (DATA_WIDTH / 8);
+    localparam int CACHE_LINES      = CACHE_BYTES / LINE_BYTES;
+
     localparam int RAM_DEPTH_WORDS  = 1024;
     localparam int RAM_READ_LATENCY = 20;
 
-    localparam int NUM_REQS         = 10;
+    localparam int NUM_WRITES       = 100;
+    localparam int NUM_READS        = 100;
 
-    localparam int EXPECTED_MEM_REQ_VALID_CYCLES = 30;
-    localparam int EXPECTED_MEM_REQ_VALID_PULSES = 3;
+    localparam int EXPECTED_TOTAL_CPU_RESPONSES = NUM_WRITES + NUM_READS;
 
     logic clk;
     logic rst;
@@ -47,41 +50,29 @@ module Basic_Test;
     logic [DATA_WIDTH-1:0]    mem_resp_rdata;
     logic [MSHR_ID_WIDTH-1:0] mem_resp_id;
 
-    int cpu_resp_count [0:7];
     int total_cpu_responses;
-    int expected_count [0:7];
-    int cpu_id_seq [0:NUM_REQS-1];
+    int cpu_resp_count [0:255];
+
+    int hit_count;
+    int miss_count;
+    int read_miss_count;
 
     int mem_req_valid_cycles;
+    int mem_read_req_cycles;
+    int mem_write_req_cycles;
+
+    int mem_resp_count;
+
     int mem_req_valid_pulses;
     logic mem_req_valid_d;
 
-    initial begin
-        expected_count[0] = 2;
-        expected_count[1] = 2;
-        expected_count[2] = 1;
-        expected_count[3] = 1;
-        expected_count[4] = 1;
-        expected_count[5] = 1;
-        expected_count[6] = 1;
-        expected_count[7] = 1;
+    int expected_total_line_allocations;
+    int expected_evictions;
+    int expected_refill_transactions;
+    int expected_eviction_transactions;
+    int expected_mem_transactions;
 
-        cpu_id_seq[0] = 0;
-        cpu_id_seq[1] = 1;
-        cpu_id_seq[2] = 2;
-        cpu_id_seq[3] = 3;
-        cpu_id_seq[4] = 4;
-        cpu_id_seq[5] = 5;
-        cpu_id_seq[6] = 6;
-        cpu_id_seq[7] = 7;
-        cpu_id_seq[8] = 0;
-        cpu_id_seq[9] = 1;
-    end
-
-    initial begin
-        clk = 1'b0;
-    end
-
+    initial clk = 1'b0;
     always #5 clk = ~clk;
 
     Cache #(
@@ -148,30 +139,51 @@ module Basic_Test;
 
     assign cpu_resp_ready = 1'b1;
 
-    task automatic send_write_miss(
-        input int word_addr,
-        input logic [DATA_WIDTH-1:0] data,
-        input logic [CPU_ID_WIDTH-1:0] id
-    );
+    task automatic send_100_write_misses_back_to_back;
+        int i;
         begin
-            @(posedge clk);
+            i = 0;
 
-            while (!cpu_req_ready) begin
-                cpu_req_valid <= 1'b0;
-                cpu_req_write <= 1'b0;
-                cpu_req_addr  <= '0;
-                cpu_req_wdata <= '0;
-                cpu_req_id    <= '0;
+            while (i < NUM_WRITES) begin
+                cpu_req_valid <= 1'b1;
+                cpu_req_write <= 1'b1;
+                cpu_req_addr  <= (2 + (i * 4)) << 2;
+                cpu_req_wdata <= 32'hA000_0000 + i;
+                cpu_req_id    <= CPU_ID_WIDTH'(i);
+
                 @(posedge clk);
+
+                if (cpu_req_ready) begin
+                    i++;
+                end
             end
 
-            cpu_req_valid <= 1'b1;
-            cpu_req_write <= 1'b1;
-            cpu_req_addr  <= word_addr << 2;
-            cpu_req_wdata <= data;
-            cpu_req_id    <= id;
+            cpu_req_valid <= 1'b0;
+            cpu_req_write <= 1'b0;
+            cpu_req_addr  <= '0;
+            cpu_req_wdata <= '0;
+            cpu_req_id    <= '0;
+        end
+    endtask
 
-            @(posedge clk);
+    task automatic send_100_read_requests_back_to_back;
+        int i;
+        begin
+            i = 0;
+
+            while (i < NUM_READS) begin
+                cpu_req_valid <= 1'b1;
+                cpu_req_write <= 1'b0;
+                cpu_req_addr  <= (2 + (i * 4)) << 2;
+                cpu_req_wdata <= '0;
+                cpu_req_id    <= CPU_ID_WIDTH'(i + NUM_WRITES);
+
+                @(posedge clk);
+
+                if (cpu_req_ready) begin
+                    i++;
+                end
+            end
 
             cpu_req_valid <= 1'b0;
             cpu_req_write <= 1'b0;
@@ -184,40 +196,62 @@ module Basic_Test;
     always_ff @(posedge clk) begin
         if (rst) begin
             total_cpu_responses <= 0;
+            hit_count           <= 0;
+            miss_count          <= 0;
 
-            for (int i = 0; i < 8; i++) begin
+            for (int i = 0; i < 256; i++) begin
                 cpu_resp_count[i] <= 0;
             end
-        end else if (cpu_resp_valid && cpu_resp_ready) begin
+        end
+        else if (cpu_resp_valid && cpu_resp_ready) begin
+            total_cpu_responses <= total_cpu_responses + 1;
             cpu_resp_count[cpu_resp_id] <= cpu_resp_count[cpu_resp_id] + 1;
-            total_cpu_responses         <= total_cpu_responses + 1;
 
-            $display("[%0t] CPU RESP: cpu_id=%0d count_now=%0d hit=%0b rdata=%h",
+            if (cpu_resp_hit)
+                hit_count <= hit_count + 1;
+            else
+                miss_count <= miss_count + 1;
+
+            $display("[%0t] CPU RESP: cpu_id=%0d count_now=%0d hit=%0b rdata=%h total_now=%0d hits_now=%0d misses_now=%0d",
                      $time,
                      cpu_resp_id,
                      cpu_resp_count[cpu_resp_id] + 1,
                      cpu_resp_hit,
-                     cpu_resp_rdata);
+                     cpu_resp_rdata,
+                     total_cpu_responses + 1,
+                     hit_count + (cpu_resp_hit ? 1 : 0),
+                     miss_count + (!cpu_resp_hit ? 1 : 0));
         end
     end
 
     always_ff @(posedge clk) begin
         if (rst) begin
             mem_req_valid_cycles <= 0;
+            mem_read_req_cycles  <= 0;
+            mem_write_req_cycles <= 0;
             mem_req_valid_pulses <= 0;
             mem_req_valid_d      <= 1'b0;
-        end else begin
+        end
+        else begin
             mem_req_valid_d <= mem_req_valid;
 
             if (mem_req_valid && mem_req_ready) begin
                 mem_req_valid_cycles <= mem_req_valid_cycles + 1;
 
-                $display("[%0t] CACHE IS SENDING: write=%0b addr=%h mshr_id=%0d wdata=%h",
+                if (mem_req_write)
+                    mem_write_req_cycles <= mem_write_req_cycles + 1;
+                else
+                    mem_read_req_cycles <= mem_read_req_cycles + 1;
+
+                $display("[%0t] CACHE IS SENDING: write=%0b addr=%h mshr_id=%0d wdata=%h total_mem_req_now=%0d read_req_now=%0d writeback_req_now=%0d",
                          $time,
                          mem_req_write,
                          mem_req_addr,
                          mem_req_id,
-                         mem_req_wdata);
+                         mem_req_wdata,
+                         mem_req_valid_cycles + 1,
+                         mem_read_req_cycles + (!mem_req_write ? 1 : 0),
+                         mem_write_req_cycles + (mem_req_write ? 1 : 0));
             end
 
             if (mem_req_valid && !mem_req_valid_d) begin
@@ -227,11 +261,17 @@ module Basic_Test;
     end
 
     always_ff @(posedge clk) begin
-        if (!rst && mem_resp_valid && mem_resp_ready) begin
-            $display("[%0t] MEM RESP: mshr_id=%0d rdata=%h",
+        if (rst) begin
+            mem_resp_count <= 0;
+        end
+        else if (mem_resp_valid && mem_resp_ready) begin
+            mem_resp_count <= mem_resp_count + 1;
+
+            $display("[%0t] MEM RESP: mshr_id=%0d rdata=%h total_mem_resp_now=%0d",
                      $time,
                      mem_resp_id,
-                     mem_resp_rdata);
+                     mem_resp_rdata,
+                     mem_resp_count + 1);
         end
     end
 
@@ -247,48 +287,102 @@ module Basic_Test;
         rst <= 1'b0;
         repeat (2) @(posedge clk);
 
-        for (int i = 0; i < NUM_REQS; i++) begin
-            send_write_miss(
-                2 + (i * 4),
-                32'hA000_0000 + i,
-                cpu_id_seq[i][CPU_ID_WIDTH-1:0]
-            );
+        $display("==================================================");
+        $display("Starting 100 back-to-back write misses");
+        $display("==================================================");
+
+        send_100_write_misses_back_to_back();
+
+        wait (total_cpu_responses >= NUM_WRITES);
+        repeat (10) @(posedge clk);
+
+        $display("==================================================");
+        $display("Starting 100 back-to-back read requests");
+        $display("==================================================");
+
+        send_100_read_requests_back_to_back();
+
+        wait (total_cpu_responses >= EXPECTED_TOTAL_CPU_RESPONSES);
+        repeat (200) @(posedge clk);
+
+        read_miss_count = miss_count - NUM_WRITES;
+
+        if (read_miss_count < 0) begin
+            read_miss_count = 0;
         end
 
-        repeat (500) @(posedge clk);
+        expected_total_line_allocations = NUM_WRITES + read_miss_count;
+
+        expected_evictions = expected_total_line_allocations - CACHE_LINES;
+
+        if (expected_evictions < 0) begin
+            expected_evictions = 0;
+        end
+
+        expected_refill_transactions = (NUM_WRITES * (WORDS_PER_LINE - 1)) +
+                                       (read_miss_count * WORDS_PER_LINE);
+
+        expected_eviction_transactions = expected_evictions * WORDS_PER_LINE;
+
+        expected_mem_transactions = expected_refill_transactions +
+                                    expected_eviction_transactions;
 
         $display("==================================================");
         $display("Basic_Test Simulation Report");
         $display("Total CPU responses              = %0d", total_cpu_responses);
+        $display("CPU hit responses                = %0d", hit_count);
+        $display("CPU miss responses               = %0d", miss_count);
+        $display("Read miss responses              = %0d", read_miss_count);
+        $display("Cache lines                      = %0d", CACHE_LINES);
+        $display("Words per line                   = %0d", WORDS_PER_LINE);
+        $display("Expected line allocations        = %0d", expected_total_line_allocations);
+        $display("Expected evictions               = %0d", expected_evictions);
+        $display("Expected refill transactions     = %0d", expected_refill_transactions);
+        $display("Expected eviction transactions   = %0d", expected_eviction_transactions);
+        $display("Expected mem transactions        = %0d", expected_mem_transactions);
         $display("mem_req_valid accepted cycles    = %0d", mem_req_valid_cycles);
+        $display("mem read request cycles          = %0d", mem_read_req_cycles);
+        $display("mem writeback request cycles     = %0d", mem_write_req_cycles);
+        $display("mem_resp_valid accepted cycles   = %0d", mem_resp_count);
         $display("mem_req_valid pulse count        = %0d", mem_req_valid_pulses);
         $display("==================================================");
 
-        for (int i = 0; i < 8; i++) begin
-            if (cpu_resp_count[i] !== expected_count[i]) begin
-                $error("CPU id %0d expected %0d responses, got %0d",
-                       i,
-                       expected_count[i],
-                       cpu_resp_count[i]);
-            end
-        end
-
-        if (total_cpu_responses !== NUM_REQS) begin
+        if (total_cpu_responses !== EXPECTED_TOTAL_CPU_RESPONSES) begin
             $error("Expected %0d total CPU responses, got %0d",
-                   NUM_REQS,
+                   EXPECTED_TOTAL_CPU_RESPONSES,
                    total_cpu_responses);
         end
 
-        if (mem_req_valid_cycles !== EXPECTED_MEM_REQ_VALID_CYCLES) begin
-            $error("Expected mem_req_valid for %0d accepted cycles, got %0d",
-                   EXPECTED_MEM_REQ_VALID_CYCLES,
+        if (mem_req_valid_cycles !== expected_mem_transactions) begin
+            $error("Expected %0d mem_req_valid accepted cycles, got %0d",
+                   expected_mem_transactions,
                    mem_req_valid_cycles);
         end
 
-        if (mem_req_valid_pulses !== EXPECTED_MEM_REQ_VALID_PULSES) begin
-            $error("Expected mem_req_valid to pulse %0d time(s), got %0d",
-                   EXPECTED_MEM_REQ_VALID_PULSES,
-                   mem_req_valid_pulses);
+        if (mem_read_req_cycles !== expected_refill_transactions) begin
+            $error("Expected %0d memory read/refill request cycles, got %0d",
+                   expected_refill_transactions,
+                   mem_read_req_cycles);
+        end
+
+        if (mem_write_req_cycles !== expected_eviction_transactions) begin
+            $error("Expected %0d memory writeback request cycles, got %0d",
+                   expected_eviction_transactions,
+                   mem_write_req_cycles);
+        end
+
+        if (mem_resp_count !== expected_mem_transactions) begin
+            $error("Expected %0d mem responses, got %0d",
+                   expected_mem_transactions,
+                   mem_resp_count);
+        end
+
+        for (int i = 0; i < 256; i++) begin
+            if (cpu_resp_count[i] > 1) begin
+                $error("CPU id %0d received duplicate responses: %0d",
+                       i,
+                       cpu_resp_count[i]);
+            end
         end
 
         $display("Basic_Test complete.");

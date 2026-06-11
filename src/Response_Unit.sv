@@ -4,8 +4,9 @@
 //   1. Hit response FIFO
 //   2. Miss response FIFO
 //
-// Uses existing FIFO module exactly as provided.
+// Uses FIFO_FWFT.
 // Miss FIFO has priority over hit FIFO.
+// Supports back-to-back responses with no bubbles.
 // ============================================================
 
 module Response_Unit #(
@@ -41,25 +42,17 @@ module Response_Unit #(
     logic hit_fifo_full;
     logic hit_fifo_empty;
     logic hit_fifo_rd_en;
-    logic hit_fifo_rd_valid;
     logic [RESP_WIDTH-1:0] hit_fifo_wr_data;
     logic [RESP_WIDTH-1:0] hit_fifo_rd_data;
 
     logic miss_fifo_full;
     logic miss_fifo_empty;
     logic miss_fifo_rd_en;
-    logic miss_fifo_rd_valid;
     logic [RESP_WIDTH-1:0] miss_fifo_wr_data;
     logic [RESP_WIDTH-1:0] miss_fifo_rd_data;
 
-    logic read_allowed;
     logic choose_miss;
     logic choose_hit;
-
-    logic out_valid_r;
-    logic out_hit_r;
-    logic [DATA_WIDTH-1:0]   out_data_r;
-    logic [CPU_ID_WIDTH-1:0] out_id_r;
 
     assign hit_ready  = !hit_fifo_full;
     assign miss_ready = !miss_fifo_full;
@@ -67,7 +60,7 @@ module Response_Unit #(
     assign hit_fifo_wr_data  = {1'b1, hit_id, hit_data};
     assign miss_fifo_wr_data = {1'b0, miss_id, miss_data};
 
-    FIFO #(
+    FIFO_FWFT #(
         .WIDTH(RESP_WIDTH),
         .DEPTH(FIFO_DEPTH)
     ) HIT_FIFO (
@@ -80,11 +73,10 @@ module Response_Unit #(
 
         .empty   (hit_fifo_empty),
         .rd_en   (hit_fifo_rd_en),
-        .rd_valid(hit_fifo_rd_valid),
         .rd_data (hit_fifo_rd_data)
     );
 
-    FIFO #(
+    FIFO_FWFT #(
         .WIDTH(RESP_WIDTH),
         .DEPTH(FIFO_DEPTH)
     ) MISS_FIFO (
@@ -97,48 +89,48 @@ module Response_Unit #(
 
         .empty   (miss_fifo_empty),
         .rd_en   (miss_fifo_rd_en),
-        .rd_valid(miss_fifo_rd_valid),
         .rd_data (miss_fifo_rd_data)
     );
 
-    assign read_allowed = !out_valid_r || cpu_resp_ready;
+    assign choose_miss = !miss_fifo_empty;
+    assign choose_hit  = miss_fifo_empty && !hit_fifo_empty;
 
-    assign choose_miss = read_allowed && !miss_fifo_empty;
-    assign choose_hit  = read_allowed &&  miss_fifo_empty && !hit_fifo_empty;
+    assign cpu_resp_valid =
+        choose_miss || choose_hit;
 
-    assign miss_fifo_rd_en = choose_miss;
-    assign hit_fifo_rd_en  = choose_hit;
+    assign cpu_resp_hit =
+        choose_miss
+        ? miss_fifo_rd_data[RESP_WIDTH-1]
+        : hit_fifo_rd_data [RESP_WIDTH-1];
 
-    always_ff @(posedge clk or posedge rst) begin
-        if (rst) begin
-            out_valid_r <= 1'b0;
-            out_hit_r   <= 1'b0;
-            out_data_r  <= '0;
-            out_id_r    <= '0;
-        end
-        else begin
-            if (cpu_resp_ready) begin
-                out_valid_r <= 1'b0;
-            end
+    assign cpu_resp_id =
+        choose_miss
+        ? miss_fifo_rd_data[DATA_WIDTH +: CPU_ID_WIDTH]
+        : hit_fifo_rd_data [DATA_WIDTH +: CPU_ID_WIDTH];
 
-            if (miss_fifo_rd_valid) begin
-                out_valid_r <= 1'b1;
-                out_hit_r   <= miss_fifo_rd_data[RESP_WIDTH-1];
-                out_id_r    <= miss_fifo_rd_data[DATA_WIDTH +: CPU_ID_WIDTH];
-                out_data_r  <= miss_fifo_rd_data[DATA_WIDTH-1:0];
-            end
-            else if (hit_fifo_rd_valid) begin
-                out_valid_r <= 1'b1;
-                out_hit_r   <= hit_fifo_rd_data[RESP_WIDTH-1];
-                out_id_r    <= hit_fifo_rd_data[DATA_WIDTH +: CPU_ID_WIDTH];
-                out_data_r  <= hit_fifo_rd_data[DATA_WIDTH-1:0];
-            end
-        end
+    assign cpu_resp_rdata =
+        choose_miss
+        ? miss_fifo_rd_data[DATA_WIDTH-1:0]
+        : hit_fifo_rd_data [DATA_WIDTH-1:0];
+
+    assign miss_fifo_rd_en =
+        cpu_resp_valid &&
+        cpu_resp_ready &&
+        choose_miss;
+
+    assign hit_fifo_rd_en =
+        cpu_resp_valid &&
+        cpu_resp_ready &&
+        choose_hit;
+    always_ff @(posedge clk) begin
+    if (!rst && hit_valid && hit_ready) begin
+        $display("[%0t] RESPONSE_UNIT PUSH HIT: id=%0d data=%h",
+                 $time, hit_id, hit_data);
     end
 
-    assign cpu_resp_valid = out_valid_r;
-    assign cpu_resp_hit   = out_hit_r;
-    assign cpu_resp_rdata = out_data_r;
-    assign cpu_resp_id    = out_id_r;
-
+    if (!rst && miss_valid && miss_ready) begin
+        $display("[%0t] RESPONSE_UNIT PUSH MISS: id=%0d data=%h",
+                 $time, miss_id, miss_data);
+    end
+    end
 endmodule

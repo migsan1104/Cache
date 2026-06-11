@@ -490,7 +490,8 @@ module Cache #(
         .DATA_WIDTH      (DATA_WIDTH),
         .LINE_WIDTH      (LINE_WIDTH),
         .CPU_ID_WIDTH    (CPU_ID_WIDTH),
-        .MSHR_ID_WIDTH   (MSHR_ID_WIDTH)
+        .MSHR_ID_WIDTH   (MSHR_ID_WIDTH),
+        .MISSQ_DEPTH     (16)
     ) MSHR_FILE (
         .clk                 (clk),
         .rst                 (rst),
@@ -588,7 +589,7 @@ module Cache #(
     Response_Unit #(
         .DATA_WIDTH  (DATA_WIDTH),
         .CPU_ID_WIDTH(CPU_ID_WIDTH),
-        .FIFO_DEPTH  (64)
+        .FIFO_DEPTH  (128)
     ) RESPONSE_UNIT (
         .clk           (clk),
         .rst           (rst),

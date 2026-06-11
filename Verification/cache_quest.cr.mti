@@ -59,13 +59,6 @@ QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
 Top level modules:
 	MSHR_Response_DeMux
 
-} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/Victim_Select.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/Victim_Select.sv
-QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
--- Compiling module Victim_Select
-
-Top level modules:
-	Victim_Select
-
 } {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/FIFO_Almost.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/FIFO_Almost.sv
 QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
 -- Compiling module FIFO_Almost
@@ -73,12 +66,19 @@ QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
 Top level modules:
 	FIFO_Almost
 
-} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/Verification/Basic_Test.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/Verification/Basic_Test.sv
+} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/Victim_Select.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/Victim_Select.sv
 QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
--- Compiling module Basic_Test
+-- Compiling module Victim_Select
 
 Top level modules:
-	Basic_Test
+	Victim_Select
+
+} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/RAM_ID.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/RAM_ID.sv
+QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
+-- Compiling module RAM_ID
+
+Top level modules:
+	RAM_ID
 
 } {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/FF.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/FF.sv
 QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
@@ -87,6 +87,13 @@ QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
 Top level modules:
 	FF
 
+} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/FF_r.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/FF_r.sv
+QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
+-- Compiling module FF_r
+
+Top level modules:
+	FF_r
+
 } {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/RAM_2W1R_Reset.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/RAM_2W1R_Reset.sv
 QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
 -- Compiling module RAM_2W1R_Reset
@@ -94,12 +101,12 @@ QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
 Top level modules:
 	RAM_2W1R_Reset
 
-} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/FF_r.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/FF_r.sv
+} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/Reg.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/Reg.sv
 QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
--- Compiling module FF_r
+-- Compiling module Reg
 
 Top level modules:
-	FF_r
+	Reg
 
 } {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/CPU_Write_Hit_Control.sv {2 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/CPU_Write_Hit_Control.sv
 QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
@@ -109,19 +116,12 @@ QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
 Top level modules:
 	CPU_Write_Hit_Control
 
-} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/Reg.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/Reg.sv
+} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/Reg_r.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/Reg_r.sv
 QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
--- Compiling module Reg
+-- Compiling module Reg_r
 
 Top level modules:
-	Reg
-
-} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/Delay.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/Delay.sv
-QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
--- Compiling module Delay
-
-Top level modules:
-	Delay
+	Reg_r
 
 } {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/Miss_Issue_Controller.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/Miss_Issue_Controller.sv
 QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
@@ -130,33 +130,12 @@ QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
 Top level modules:
 	Miss_Issue_Controller
 
-} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/Reg_r.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/Reg_r.sv
+} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/Delay.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/Delay.sv
 QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
--- Compiling module Reg_r
+-- Compiling module Delay
 
 Top level modules:
-	Reg_r
-
-} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/Delay_r.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/Delay_r.sv
-QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
--- Compiling module Delay_r
-
-Top level modules:
-	Delay_r
-
-} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/Memory_Request_Unit.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/Memory_Request_Unit.sv
-QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
--- Compiling module Memory_Request_Unit
-
-Top level modules:
-	Memory_Request_Unit
-
-} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/RAM.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/RAM.sv
-QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
--- Compiling module RAM
-
-Top level modules:
-	RAM
+	Delay
 
 } {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/Replacement.sv {2 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/Replacement.sv
 QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
@@ -187,12 +166,26 @@ QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
 Top level modules:
 	Replacement
 
-} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/Address_Decode.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/Address_Decode.sv
+} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/RAM.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/RAM.sv
 QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
--- Compiling module Address_Decode
+-- Compiling module RAM
 
 Top level modules:
-	Address_Decode
+	RAM
+
+} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/Memory_Request_Unit.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/Memory_Request_Unit.sv
+QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
+-- Compiling module Memory_Request_Unit
+
+Top level modules:
+	Memory_Request_Unit
+
+} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/Delay_r.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/Delay_r.sv
+QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
+-- Compiling module Delay_r
+
+Top level modules:
+	Delay_r
 
 } {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_File.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_File.sv
 QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
@@ -209,47 +202,26 @@ QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
 Top level modules:
 	MSHR_Response_Mux
 
+} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/Address_Decode.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/Address_Decode.sv
+QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
+-- Compiling module Address_Decode
+
+Top level modules:
+	Address_Decode
+
+} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/FIFO_FWFT.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/FIFO_FWFT.sv
+QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
+-- Compiling module FIFO_FWFT
+
+Top level modules:
+	FIFO_FWFT
+
 } {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/Delay_FF.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/Delay_FF.sv
 QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
 -- Compiling module Delay_FF
 
 Top level modules:
 	Delay_FF
-
-} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Entry.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Entry.sv
-QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
--- Compiling module MSHR_Entry
-
-Top level modules:
-	MSHR_Entry
-
-} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/RAM_2W1R.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/RAM_2W1R.sv
-QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
--- Compiling module RAM_2W1R
-
-Top level modules:
-	RAM_2W1R
-
-} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/Delay_FF_r.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/Delay_FF_r.sv
-QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
--- Compiling module Delay_FF_r
-
-Top level modules:
-	Delay_FF_r
-
-} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/Hit_compare.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/Hit_compare.sv
-QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
--- Compiling module Hit_compare
-
-Top level modules:
-	Hit_compare
-
-} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/Memory_Request_Arbirter.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/Memory_Request_Arbirter.sv
-QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
--- Compiling module Memory_Request_Arbiter
-
-Top level modules:
-	Memory_Request_Arbiter
 
 } {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Mux.sv {2 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Mux.sv
 QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
@@ -261,5 +233,40 @@ QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
 
 Top level modules:
 	MSHR_Mux
+
+} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/Memory_Request_Arbirter.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/Memory_Request_Arbirter.sv
+QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
+-- Compiling module Memory_Request_Arbiter
+
+Top level modules:
+	Memory_Request_Arbiter
+
+} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/Hit_compare.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/Hit_compare.sv
+QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
+-- Compiling module Hit_compare
+
+Top level modules:
+	Hit_compare
+
+} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/Delay_FF_r.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/Delay_FF_r.sv
+QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
+-- Compiling module Delay_FF_r
+
+Top level modules:
+	Delay_FF_r
+
+} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/RAM_2W1R.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/RAM_2W1R.sv
+QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
+-- Compiling module RAM_2W1R
+
+Top level modules:
+	RAM_2W1R
+
+} {} {}} /ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Entry.sv {1 {vlog -work work -vopt -sv -stats=none /ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Entry.sv
+QuestaSim-64 vlog 2023.3 Compiler 2023.07 Jul 17 2023
+-- Compiling module MSHR_Entry
+
+Top level modules:
+	MSHR_Entry
 
 } {} {}}
