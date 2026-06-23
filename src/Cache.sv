@@ -1,13 +1,23 @@
 // ============================================================
-// Parameterized set-associative cache skeleton
-// One data/tag/flag array per way
-// Address format: [tag ID][set ID][word ID]
-// Uses RAM_2W1R: port A = CPU write side, port B = refill side
-// Downstream memory interface is one-word request/response
+// Parameterized set-associative cache
 //
-// Pipeline split:
-//   Compare -> Hit Select -> Response
-//   Compare -> Replacement -> Miss Select -> MSHR_File absorption FIFO
+// Pipeline:
+//
+//   Phase 0: Address_Decode
+//   Phase 1: Array_Read
+//   Phase 2: Compare_Select_Replace
+//     - compare tags
+//     - choose invalid way or aligned replacement_way
+//     - early CPU write path:
+//         * write hit updates data/flags
+//         * write miss invalid installs tag/data/flags
+//         * write miss eviction installs tag/data/flags
+//     - captures victim info directly for MSHR
+//   Phase 3: MSHR alloc
+//
+// IMPORTANT:
+//   Replacement.lookup_set is driven by dec_set_id so that registered
+//   replacement_way is aligned with Compare_Select_Replace.
 // ============================================================
 
 module Cache #(
@@ -17,7 +27,8 @@ module Cache #(
     parameter int LINE_BYTES    = 16,
     parameter int ASSOC         = 4,
     parameter int CPU_ID_WIDTH  = 4,
-    parameter int MSHR_ID_WIDTH = 2
+    parameter int MSHR_ID_WIDTH = 2,
+    localparam logic DEBUG      = 1'b0
 )(
     input  logic clk,
     input  logic rst,
@@ -67,118 +78,79 @@ module Cache #(
     localparam int LINE_ADDR_WIDTH = WORD_ADDR_W - WORD_OFFSET_W;
 
     localparam int WAY_INDEX_W     = (ASSOC <= 1) ? 1 : $clog2(ASSOC);
-
-    localparam int FLAG_BITS       = 4;
-    localparam int READ_LATENCY    = 1;
     localparam int MSHR_COUNT      = 4;
 
-    localparam int FLAG_VALID_BIT  = 0;
-    localparam int FLAG_DIRTY_BIT  = 1;
+    logic [SET_INDEX_W-1:0]       array_rindex;
 
-    logic [TAG_WIDTH-1:0]       addr_tag;
-    logic [SET_INDEX_W-1:0]     addr_set_id;
-    logic [WORD_OFFSET_W-1:0]   addr_word_id;
-    logic [LINE_ADDR_WIDTH-1:0] addr_line_addr;
+    logic                         dec_valid;
+    logic                         dec_write;
+    logic [ADDR_WIDTH-1:0]        dec_addr;
+    logic [DATA_WIDTH-1:0]        dec_wdata;
+    logic [CPU_ID_WIDTH-1:0]      dec_cpu_req_id;
+    logic [TAG_WIDTH-1:0]         dec_tag;
+    logic [SET_INDEX_W-1:0]       dec_set_id;
+    logic [WORD_OFFSET_W-1:0]     dec_word_id;
+    logic [LINE_ADDR_WIDTH-1:0]   dec_line_addr;
 
-    logic lookup_valid_r;
-    logic lookup_write_r;
+    logic [LINE_WIDTH-1:0]        way_line       [ASSOC];
+    logic [TAG_WIDTH-1:0]         way_tag        [ASSOC];
+    logic                         way_allocated  [ASSOC];
+    logic                         way_dirty      [ASSOC];
+    logic [WORDS_PER_LINE-1:0]    way_word_valid [ASSOC];
 
-    logic [ADDR_WIDTH-1:0]      lookup_addr_r;
-    logic [DATA_WIDTH-1:0]      lookup_wdata_r;
-    logic [CPU_ID_WIDTH-1:0]    lookup_cpu_req_id_r;
-    logic [TAG_WIDTH-1:0]       lookup_tag_r;
-    logic [SET_INDEX_W-1:0]     lookup_set_id_r;
-    logic [WORD_OFFSET_W-1:0]   lookup_word_id_r;
-    logic [LINE_ADDR_WIDTH-1:0] lookup_line_addr_r;
+    logic                         cmp_valid;
+    logic                         cmp_write;
+    logic                         cmp_hit;
+    logic                         cmp_miss;
+    logic [ADDR_WIDTH-1:0]        cmp_addr;
+    logic [DATA_WIDTH-1:0]        cmp_wdata;
+    logic [DATA_WIDTH-1:0]        cmp_rdata;
+    logic [CPU_ID_WIDTH-1:0]      cmp_cpu_req_id;
+    logic [TAG_WIDTH-1:0]         cmp_tag;
+    logic [SET_INDEX_W-1:0]       cmp_set_id;
+    logic [WORD_OFFSET_W-1:0]     cmp_word_id;
+    logic [LINE_ADDR_WIDTH-1:0]   cmp_line_addr;
+    logic [WAY_INDEX_W-1:0]       cmp_hit_way;
+    logic [WAY_INDEX_W-1:0]       cmp_miss_way;
 
-    logic compare_valid_r;
-    logic compare_write_r;
+    logic                         miss_select_valid;
+    logic                         miss_select_write;
+    logic [ADDR_WIDTH-1:0]        miss_select_addr;
+    logic [DATA_WIDTH-1:0]        miss_select_wdata;
+    logic [CPU_ID_WIDTH-1:0]      miss_select_cpu_req_id;
+    logic [TAG_WIDTH-1:0]         miss_select_tag;
+    logic [SET_INDEX_W-1:0]       miss_select_set_id;
+    logic [WORD_OFFSET_W-1:0]     miss_select_word_id;
+    logic [LINE_ADDR_WIDTH-1:0]   miss_select_line_addr;
+    logic [WAY_INDEX_W-1:0]       miss_select_way;
 
-    logic [ADDR_WIDTH-1:0]      compare_addr_r;
-    logic [DATA_WIDTH-1:0]      compare_wdata_r;
-    logic [CPU_ID_WIDTH-1:0]    compare_cpu_req_id_r;
-    logic [TAG_WIDTH-1:0]       compare_tag_r;
-    logic [SET_INDEX_W-1:0]     compare_set_id_r;
-    logic [WORD_OFFSET_W-1:0]   compare_word_id_r;
-    logic [LINE_ADDR_WIDTH-1:0] compare_line_addr_r;
+    logic                         miss_select_victim_valid;
+    logic                         miss_select_victim_dirty;
+    logic [TAG_WIDTH-1:0]         miss_select_victim_tag;
+    logic [LINE_WIDTH-1:0]        miss_select_victim_line;
 
-    logic select_valid_r;
-    logic select_write_r;
-    logic select_hit_r;
+    logic                         regular_found;
+    logic [WAY_INDEX_W-1:0]       regular_way;
 
-    logic [ADDR_WIDTH-1:0]      select_addr_r;
-    logic [DATA_WIDTH-1:0]      select_wdata_r;
-    logic [DATA_WIDTH-1:0]      select_rdata_r;
-    logic [CPU_ID_WIDTH-1:0]    select_cpu_req_id_r;
-    logic [TAG_WIDTH-1:0]       select_tag_r;
-    logic [WAY_INDEX_W-1:0]     select_hit_way_r;
-    logic [SET_INDEX_W-1:0]     select_set_id_r;
-    logic [WORD_OFFSET_W-1:0]   select_word_id_r;
-    logic [LINE_ADDR_WIDTH-1:0] select_line_addr_r;
+    logic                         cpu_write_valid;
+    logic [ASSOC-1:0]             cpu_write_wen;
+    logic [ASSOC-1:0]             cpu_write_replace;
+    logic [WAY_INDEX_W-1:0]       cpu_write_way;
+    logic [SET_INDEX_W-1:0]       cpu_write_set_id;
+    logic [WORD_OFFSET_W-1:0]     cpu_write_word_id;
+    logic [DATA_WIDTH-1:0]        cpu_write_wdata;
 
-    logic miss_select_valid_r;
-    logic miss_select_write_r;
+    logic [ASSOC-1:0]             cpu_tag_wen;
+    logic [SET_INDEX_W-1:0]       cpu_tag_waddr;
+    logic [TAG_WIDTH-1:0]         cpu_tag_wdata;
 
-    logic [ADDR_WIDTH-1:0]      miss_select_addr_r;
-    logic [DATA_WIDTH-1:0]      miss_select_wdata_r;
-    logic [CPU_ID_WIDTH-1:0]    miss_select_cpu_req_id_r;
-    logic [TAG_WIDTH-1:0]       miss_select_tag_r;
-    logic [SET_INDEX_W-1:0]     miss_select_set_id_r;
-    logic [WORD_OFFSET_W-1:0]   miss_select_word_id_r;
-    logic [LINE_ADDR_WIDTH-1:0] miss_select_line_addr_r;
-    logic [WAY_INDEX_W-1:0]     miss_select_way_r;
-
-    logic                       miss_select_victim_valid_r;
-    logic                       miss_select_victim_dirty_r;
-    logic [TAG_WIDTH-1:0]       miss_select_victim_tag_r;
-    logic [LINE_WIDTH-1:0]      miss_select_victim_line_r;
-
-    logic [ASSOC-1:0] cpu_data_wen;
-    logic [ASSOC-1:0] cpu_tag_wen;
-    logic [ASSOC-1:0] cpu_flag_wen;
-
-    logic [ASSOC-1:0] refill_data_wen;
-    logic [ASSOC-1:0] refill_tag_wen;
-    logic [ASSOC-1:0] refill_flag_wen;
-
-    logic [SET_INDEX_W-1:0] array_rindex;
-    logic [SET_INDEX_W-1:0] cpu_array_windex;
-    logic [SET_INDEX_W-1:0] refill_array_windex;
-
-    logic [LINE_WIDTH-1:0] cpu_data_wline [ASSOC];
-    logic [TAG_WIDTH-1:0]  cpu_tag_wdata  [ASSOC];
-    logic [FLAG_BITS-1:0]  cpu_flag_wdata [ASSOC];
-
-    logic [LINE_WIDTH-1:0] refill_data_wline [ASSOC];
-    logic [TAG_WIDTH-1:0]  refill_tag_wdata  [ASSOC];
-    logic [FLAG_BITS-1:0]  refill_flag_wdata [ASSOC];
-
-    logic [LINE_WIDTH-1:0] data_rline [ASSOC];
-    logic [TAG_WIDTH-1:0]  tag_rdata  [ASSOC];
-    logic [FLAG_BITS-1:0]  flag_rdata [ASSOC];
-
-    logic [LINE_WIDTH-1:0] data_rline_r [ASSOC];
-    logic [TAG_WIDTH-1:0]  tag_rdata_r  [ASSOC];
-    logic [FLAG_BITS-1:0]  flag_rdata_r [ASSOC];
-
-    logic [ASSOC-1:0]       way_hit;
-    logic [DATA_WIDTH-1:0]  way_word [ASSOC];
-    logic [WAY_INDEX_W-1:0] hit_way;
-    logic [DATA_WIDTH-1:0]  selected_word;
-
-    logic [ASSOC-1:0]       compare_valid_bits;
-    logic [WAY_INDEX_W-1:0] victim_way;
-
-    logic                   victim_valid;
-    logic                   victim_dirty;
-    logic [TAG_WIDTH-1:0]   victim_tag;
-    logic [LINE_WIDTH-1:0]  victim_line;
-
-    logic                   compare_miss;
+    logic [WAY_INDEX_W-1:0]       replacement_way;
+    logic                         replacement_update_valid;
+    logic [SET_INDEX_W-1:0]       replacement_update_set;
+    logic [WAY_INDEX_W-1:0]       replacement_update_way;
 
     logic                         mshr_alloc_ready;
     logic [MSHR_ID_WIDTH-1:0]     mshr_alloc_id;
-
     logic                         mshr_full;
     logic                         mshr_empty;
 
@@ -198,92 +170,64 @@ module Cache #(
     logic [TAG_WIDTH-1:0]         refill_tag;
     logic [WAY_INDEX_W-1:0]       refill_way;
     logic                         refill_dirty;
+    logic                         refill_eviction;
     logic [LINE_WIDTH-1:0]        refill_line;
 
-    logic hit_resp_valid;
-    logic miss_resp_valid;
-    logic hit_resp_ready;
-    logic miss_resp_ready;
+    logic [ASSOC-1:0]             refill_way_wen;
+    logic [ASSOC-1:0]             refill_tag_wen;
 
-    Address_Decode #(
-        .ADDR_WIDTH (ADDR_WIDTH),
-        .DATA_WIDTH (DATA_WIDTH),
-        .CACHE_BYTES(CACHE_BYTES),
-        .LINE_BYTES (LINE_BYTES),
-        .ASSOC      (ASSOC)
-    ) ADDR_DECODE (
-        .addr     (cpu_req_addr),
-        .tag      (addr_tag),
-        .set_id   (addr_set_id),
-        .word_id  (addr_word_id),
-        .line_addr(addr_line_addr)
-    );
+    logic                         hit_resp_valid;
+    logic                         miss_resp_valid;
+    logic                         hit_resp_ready;
+    logic                         miss_resp_ready;
 
-    assign array_rindex        = addr_set_id;
-    assign cpu_array_windex    = select_set_id_r;
-    assign refill_array_windex = refill_set_id;
+    logic                         dbg_mshr_alloc_fire;
+    integer                       dbg_mshr_alloc_count;
+    integer                       dbg_expected_eviction_count;
+    integer                       dbg_dirty_eviction_count;
+    integer                       dbg_clean_eviction_count;
 
     assign cpu_req_ready = hit_resp_ready && mshr_alloc_ready;
+    assign dbg_mshr_alloc_fire = miss_select_valid && mshr_alloc_ready;
 
-    always_ff @(posedge clk) begin
-        if (rst) begin
-            lookup_valid_r      <= 1'b0;
-            lookup_write_r      <= 1'b0;
-            lookup_addr_r       <= '0;
-            lookup_wdata_r      <= '0;
-            lookup_cpu_req_id_r <= '0;
-            lookup_tag_r        <= '0;
-            lookup_set_id_r     <= '0;
-            lookup_word_id_r    <= '0;
-            lookup_line_addr_r  <= '0;
-        end
-        else if (cpu_req_ready) begin
-            lookup_valid_r      <= cpu_req_valid;
-            lookup_write_r      <= cpu_req_write;
-            lookup_addr_r       <= cpu_req_addr;
-            lookup_wdata_r      <= cpu_req_wdata;
-            lookup_cpu_req_id_r <= cpu_req_id;
-            lookup_tag_r        <= addr_tag;
-            lookup_set_id_r     <= addr_set_id;
-            lookup_word_id_r    <= addr_word_id;
-            lookup_line_addr_r  <= addr_line_addr;
-        end
-    end
+    Address_Decode #(
+        .ADDR_WIDTH   (ADDR_WIDTH),
+        .DATA_WIDTH   (DATA_WIDTH),
+        .CACHE_BYTES  (CACHE_BYTES),
+        .LINE_BYTES   (LINE_BYTES),
+        .ASSOC        (ASSOC),
+        .CPU_ID_WIDTH (CPU_ID_WIDTH)
+    ) ADDR_DECODE (
+        .clk            (clk),
+        .rst            (rst),
 
-    always_ff @(posedge clk) begin
-        if (rst) begin
-            compare_valid_r      <= 1'b0;
-            compare_write_r      <= 1'b0;
-            compare_addr_r       <= '0;
-            compare_wdata_r      <= '0;
-            compare_cpu_req_id_r <= '0;
-            compare_tag_r        <= '0;
-            compare_set_id_r     <= '0;
-            compare_word_id_r    <= '0;
-            compare_line_addr_r  <= '0;
+        .in_valid       (cpu_req_valid),
+        .in_ready       (cpu_req_ready),
+        .in_write       (cpu_req_write),
+        .in_addr        (cpu_req_addr),
+        .in_wdata       (cpu_req_wdata),
+        .in_cpu_req_id  (cpu_req_id),
 
-            for (int i = 0; i < ASSOC; i++) begin
-                data_rline_r[i] <= '0;
-                tag_rdata_r[i]  <= '0;
-                flag_rdata_r[i] <= '0;
-            end
-        end
-        else if (cpu_req_ready) begin
-            compare_valid_r      <= lookup_valid_r;
-            compare_write_r      <= lookup_write_r;
-            compare_addr_r       <= lookup_addr_r;
-            compare_wdata_r      <= lookup_wdata_r;
-            compare_cpu_req_id_r <= lookup_cpu_req_id_r;
-            compare_tag_r        <= lookup_tag_r;
-            compare_set_id_r     <= lookup_set_id_r;
-            compare_word_id_r    <= lookup_word_id_r;
-            compare_line_addr_r  <= lookup_line_addr_r;
+        .array_raddr    (array_rindex),
 
-            for (int i = 0; i < ASSOC; i++) begin
-                data_rline_r[i] <= data_rline[i];
-                tag_rdata_r[i]  <= tag_rdata[i];
-                flag_rdata_r[i] <= flag_rdata[i];
-            end
+        .out_valid      (dec_valid),
+        .out_write      (dec_write),
+        .out_addr       (dec_addr),
+        .out_wdata      (dec_wdata),
+        .out_cpu_req_id (dec_cpu_req_id),
+        .out_tag        (dec_tag),
+        .out_set_id     (dec_set_id),
+        .out_word_id    (dec_word_id),
+        .out_line_addr  (dec_line_addr)
+    );
+
+    always_comb begin
+        refill_way_wen = '0;
+        refill_tag_wen = '0;
+
+        if (refill_wen) begin
+            refill_way_wen[refill_way] = 1'b1;
+            refill_tag_wen[refill_way] = 1'b1;
         end
     end
 
@@ -292,370 +236,391 @@ module Cache #(
     generate
         for (way = 0; way < ASSOC; way++) begin : GEN_WAYS
 
-            RAM_2W1R #(
-                .D_WIDTH     (LINE_WIDTH),
-                .DEPTH       (NUM_SETS),
-                .READ_LATENCY(READ_LATENCY)
-            ) DATA_ARRAY (
-                .clk    (clk),
+            Flag_Data_Array #(
+                .DATA_WIDTH     (DATA_WIDTH),
+                .LINE_WIDTH     (LINE_WIDTH),
+                .DEPTH          (NUM_SETS),
+                .SET_INDEX_W    (SET_INDEX_W),
+                .WORDS_PER_LINE (WORDS_PER_LINE),
+                .WORD_OFFSET_W  (WORD_OFFSET_W)
+            ) FLAG_DATA_ARRAY (
+                .clk             (clk),
+                .rst             (rst),
 
-                .wen_a  (cpu_data_wen[way]),
-                .waddr_a(cpu_array_windex),
-                .wdata_a(cpu_data_wline[way]),
+                .raddr           (array_rindex),
 
-                .wen_b  (refill_data_wen[way]),
-                .waddr_b(refill_array_windex),
-                .wdata_b(refill_data_wline[way]),
+                .rline           (way_line[way]),
+                .allocated       (way_allocated[way]),
+                .dirty           (way_dirty[way]),
+                .word_valid      (way_word_valid[way]),
 
-                .raddr  (array_rindex),
-                .rdata  (data_rline[way])
+                .refill_wen      (refill_way_wen[way]),
+                .refill_waddr    (refill_set_id),
+                .refill_line     (refill_line),
+                .refill_dirty    (refill_dirty),
+                .refill_eviction (refill_eviction),
+
+                .cpu_word_wen    (cpu_write_wen[way]),
+                .cpu_replace     (cpu_write_replace[way]),
+                .cpu_waddr       (cpu_write_set_id),
+                .cpu_word_id     (cpu_write_word_id),
+                .cpu_wdata       (cpu_write_wdata)
             );
 
-            RAM_2W1R #(
-                .D_WIDTH     (TAG_WIDTH),
+            Tag_Array #(
+                .TAG_WIDTH   (TAG_WIDTH),
                 .DEPTH       (NUM_SETS),
-                .READ_LATENCY(READ_LATENCY)
+                .SET_INDEX_W (SET_INDEX_W)
             ) TAG_ARRAY (
-                .clk    (clk),
+                .clk          (clk),
+                .rst          (rst),
 
-                .wen_a  (cpu_tag_wen[way]),
-                .waddr_a(cpu_array_windex),
-                .wdata_a(cpu_tag_wdata[way]),
+                .raddr        (array_rindex),
+                .rdata        (way_tag[way]),
 
-                .wen_b  (refill_tag_wen[way]),
-                .waddr_b(refill_array_windex),
-                .wdata_b(refill_tag_wdata[way]),
+                .early_wen    (cpu_tag_wen[way]),
+                .early_waddr  (cpu_tag_waddr),
+                .early_wdata  (cpu_tag_wdata),
 
-                .raddr  (array_rindex),
-                .rdata  (tag_rdata[way])
+                .refill_wen   (refill_tag_wen[way]),
+                .refill_waddr (refill_set_id),
+                .refill_wdata (refill_tag)
             );
-
-            RAM_2W1R_Reset #(
-                .D_WIDTH     (FLAG_BITS),
-                .DEPTH       (NUM_SETS),
-                .READ_LATENCY(READ_LATENCY)
-            ) FLAG_ARRAY (
-                .clk    (clk),
-                .rst    (rst),
-
-                .wen_a  (cpu_flag_wen[way]),
-                .waddr_a(cpu_array_windex),
-                .wdata_a(cpu_flag_wdata[way]),
-
-                .wen_b  (refill_flag_wen[way]),
-                .waddr_b(refill_array_windex),
-                .wdata_b(refill_flag_wdata[way]),
-
-                .raddr  (array_rindex),
-                .rdata  (flag_rdata[way])
-            );
-
-            Hit_compare #(
-                .TAG_BITS(TAG_WIDTH)
-            ) TAG_COMPARE (
-                .clk       (clk),
-                .rst       (rst),
-                .req_tag   (lookup_tag_r),
-                .stored_tag(tag_rdata[way]),
-                .valid     (flag_rdata[way][FLAG_VALID_BIT]),
-                .hit       (way_hit[way])
-            );
-
-            assign way_word[way] =
-                data_rline_r[way][compare_word_id_r * DATA_WIDTH +: DATA_WIDTH];
 
         end
     endgenerate
 
-    always_comb begin
-        hit_way       = '0;
-        selected_word = '0;
-
-        for (int i = 0; i < ASSOC; i++) begin
-            if (way_hit[i]) begin
-                hit_way       = i[WAY_INDEX_W-1:0];
-                selected_word = way_word[i];
-            end
-        end
-    end
-
-    always_ff @(posedge clk) begin
-        if (rst) begin
-            select_valid_r      <= 1'b0;
-            select_write_r      <= 1'b0;
-            select_hit_r        <= 1'b0;
-            select_addr_r       <= '0;
-            select_wdata_r      <= '0;
-            select_rdata_r      <= '0;
-            select_cpu_req_id_r <= '0;
-            select_tag_r        <= '0;
-            select_hit_way_r    <= '0;
-            select_set_id_r     <= '0;
-            select_word_id_r    <= '0;
-            select_line_addr_r  <= '0;
-        end
-        else if (cpu_req_ready) begin
-            select_valid_r      <= compare_valid_r;
-            select_write_r      <= compare_write_r;
-            select_hit_r        <= |way_hit;
-            select_addr_r       <= compare_addr_r;
-            select_wdata_r      <= compare_wdata_r;
-            select_rdata_r      <= selected_word;
-            select_cpu_req_id_r <= compare_cpu_req_id_r;
-            select_tag_r        <= compare_tag_r;
-            select_hit_way_r    <= hit_way;
-            select_set_id_r     <= compare_set_id_r;
-            select_word_id_r    <= compare_word_id_r;
-            select_line_addr_r  <= compare_line_addr_r;
-        end
-    end
-
-    assign compare_miss = compare_valid_r && !(|way_hit);
-
-    always_comb begin
-        for (int i = 0; i < ASSOC; i++) begin
-            compare_valid_bits[i] = flag_rdata_r[i][FLAG_VALID_BIT];
-        end
-    end
-
     Replacement #(
-        .ASSOC      (ASSOC),
-        .NUM_SETS   (NUM_SETS),
-        .WAY_INDEX_W(WAY_INDEX_W),
-        .SET_INDEX_W(SET_INDEX_W)
+        .ASSOC       (ASSOC),
+        .NUM_SETS    (NUM_SETS),
+        .WAY_INDEX_W (WAY_INDEX_W),
+        .SET_INDEX_W (SET_INDEX_W)
     ) REPLACEMENT (
-        .clk         (clk),
-        .rst         (rst),
+        .clk             (clk),
+        .rst             (rst),
 
-        .lookup_set  (compare_set_id_r),
-        .valid_bits  (compare_valid_bits),
-        .victim_way  (victim_way),
+        .lookup_set      (dec_set_id),
+        .replacement_way (replacement_way),
 
-        .update_valid(compare_miss),
-        .update_set  (compare_set_id_r),
-        .update_way  (victim_way)
+        .update_valid    (replacement_update_valid),
+        .update_set      (replacement_update_set),
+        .update_way      (replacement_update_way)
     );
 
-    always_comb begin
-        victim_line  = data_rline_r[victim_way];
-        victim_tag   = tag_rdata_r[victim_way];
-        victim_valid = flag_rdata_r[victim_way][FLAG_VALID_BIT];
-        victim_dirty = flag_rdata_r[victim_way][FLAG_DIRTY_BIT];
-    end
-
-    always_ff @(posedge clk) begin
-        if (rst) begin
-            miss_select_valid_r        <= 1'b0;
-            miss_select_write_r        <= 1'b0;
-            miss_select_addr_r         <= '0;
-            miss_select_wdata_r        <= '0;
-            miss_select_cpu_req_id_r   <= '0;
-            miss_select_tag_r          <= '0;
-            miss_select_set_id_r       <= '0;
-            miss_select_word_id_r      <= '0;
-            miss_select_line_addr_r    <= '0;
-            miss_select_way_r          <= '0;
-
-            miss_select_victim_valid_r <= 1'b0;
-            miss_select_victim_dirty_r <= 1'b0;
-            miss_select_victim_tag_r   <= '0;
-            miss_select_victim_line_r  <= '0;
-        end
-        else if (cpu_req_ready) begin
-            miss_select_valid_r        <= compare_miss;
-            miss_select_write_r        <= compare_write_r;
-            miss_select_addr_r         <= compare_addr_r;
-            miss_select_wdata_r        <= compare_wdata_r;
-            miss_select_cpu_req_id_r   <= compare_cpu_req_id_r;
-            miss_select_tag_r          <= compare_tag_r;
-            miss_select_set_id_r       <= compare_set_id_r;
-            miss_select_word_id_r      <= compare_word_id_r;
-            miss_select_line_addr_r    <= compare_line_addr_r;
-            miss_select_way_r          <= victim_way;
-
-            miss_select_victim_valid_r <= victim_valid;
-            miss_select_victim_dirty_r <= victim_dirty;
-            miss_select_victim_tag_r   <= victim_tag;
-            miss_select_victim_line_r  <= victim_line;
-        end
-    end
-
-    MSHR_File #(
-        .ADDR_WIDTH      (ADDR_WIDTH),
-        .LINE_ADDR_WIDTH (LINE_ADDR_WIDTH),
-        .SET_INDEX_W     (SET_INDEX_W),
-        .WORD_OFFSET_W   (WORD_OFFSET_W),
-        .TAG_WIDTH       (TAG_WIDTH),
-        .WAY_INDEX_W     (WAY_INDEX_W),
+    Compare_Select_Replace #(
+        .ASSOC           (ASSOC),
         .DATA_WIDTH      (DATA_WIDTH),
         .LINE_WIDTH      (LINE_WIDTH),
+        .TAG_WIDTH       (TAG_WIDTH),
+        .ADDR_WIDTH      (ADDR_WIDTH),
         .CPU_ID_WIDTH    (CPU_ID_WIDTH),
-        .MSHR_ID_WIDTH   (MSHR_ID_WIDTH),
-        .MISSQ_DEPTH     (16)
+        .SET_INDEX_W     (SET_INDEX_W),
+        .WORD_OFFSET_W   (WORD_OFFSET_W),
+        .LINE_ADDR_WIDTH (LINE_ADDR_WIDTH),
+        .WORDS_PER_LINE  (WORDS_PER_LINE),
+        .WAY_INDEX_W     (WAY_INDEX_W)
+    ) COMPARE_SELECT_REPLACE (
+        .clk                      (clk),
+        .rst                      (rst),
+
+        .in_valid                 (dec_valid),
+        .in_write                 (dec_write),
+        .in_addr                  (dec_addr),
+        .in_wdata                 (dec_wdata),
+        .in_cpu_req_id            (dec_cpu_req_id),
+        .in_tag                   (dec_tag),
+        .in_set_id                (dec_set_id),
+        .in_word_id               (dec_word_id),
+        .in_line_addr             (dec_line_addr),
+
+        .way_line                 (way_line),
+        .way_tag                  (way_tag),
+        .way_allocated            (way_allocated),
+        .way_dirty                (way_dirty),
+        .way_word_valid           (way_word_valid),
+
+        .replacement_way          (replacement_way),
+
+        .out_valid                (cmp_valid),
+        .out_write                (cmp_write),
+        .out_hit                  (cmp_hit),
+        .out_miss                 (cmp_miss),
+
+        .out_addr                 (cmp_addr),
+        .out_wdata                (cmp_wdata),
+        .out_rdata                (cmp_rdata),
+        .out_cpu_req_id           (cmp_cpu_req_id),
+        .out_tag                  (cmp_tag),
+        .out_set_id               (cmp_set_id),
+        .out_word_id              (cmp_word_id),
+        .out_line_addr            (cmp_line_addr),
+
+        .out_hit_way              (cmp_hit_way),
+        .out_miss_way             (cmp_miss_way),
+
+        .out_victim_valid         (miss_select_victim_valid),
+        .out_victim_dirty         (miss_select_victim_dirty),
+        .out_victim_tag           (miss_select_victim_tag),
+        .out_victim_line          (miss_select_victim_line),
+
+        .regular_found            (regular_found),
+        .regular_way              (regular_way),
+
+        .cpu_write_valid          (cpu_write_valid),
+        .cpu_write_wen            (cpu_write_wen),
+        .cpu_write_replace        (cpu_write_replace),
+        .cpu_write_way            (cpu_write_way),
+        .cpu_write_set_id         (cpu_write_set_id),
+        .cpu_write_word_id        (cpu_write_word_id),
+        .cpu_write_wdata          (cpu_write_wdata),
+
+        .cpu_tag_wen              (cpu_tag_wen),
+        .cpu_tag_waddr            (cpu_tag_waddr),
+        .cpu_tag_wdata            (cpu_tag_wdata),
+
+        .replacement_update_valid (replacement_update_valid),
+        .replacement_update_set   (replacement_update_set),
+        .replacement_update_way   (replacement_update_way)
+    );
+
+    assign miss_select_valid      = cmp_valid && cmp_miss;
+    assign miss_select_write      = cmp_write;
+    assign miss_select_addr       = cmp_addr;
+    assign miss_select_wdata      = cmp_wdata;
+    assign miss_select_cpu_req_id = cmp_cpu_req_id;
+    assign miss_select_tag        = cmp_tag;
+    assign miss_select_set_id     = cmp_set_id;
+    assign miss_select_word_id    = cmp_word_id;
+    assign miss_select_line_addr  = cmp_line_addr;
+    assign miss_select_way        = cmp_miss_way;
+
+    MSHR_File #(
+        .ADDR_WIDTH       (ADDR_WIDTH),
+        .LINE_ADDR_WIDTH  (LINE_ADDR_WIDTH),
+        .SET_INDEX_W      (SET_INDEX_W),
+        .WORD_OFFSET_W    (WORD_OFFSET_W),
+        .TAG_WIDTH        (TAG_WIDTH),
+        .WAY_INDEX_W      (WAY_INDEX_W),
+        .DATA_WIDTH       (DATA_WIDTH),
+        .LINE_WIDTH       (LINE_WIDTH),
+        .CPU_ID_WIDTH     (CPU_ID_WIDTH),
+        .MSHR_ID_WIDTH    (MSHR_ID_WIDTH),
+        .MISSQ_DEPTH      (32),
+        .MSHR_AF          (8)
     ) MSHR_FILE (
-        .clk                 (clk),
-        .rst                 (rst),
+        .clk                  (clk),
+        .rst                  (rst),
 
-        .alloc_valid         (miss_select_valid_r),
-        .alloc_ready         (mshr_alloc_ready),
+        .alloc_valid          (miss_select_valid),
+        .alloc_ready          (mshr_alloc_ready),
 
-        .alloc_line_addr     (miss_select_line_addr_r),
-        .alloc_set_id        (miss_select_set_id_r),
-        .alloc_word_id       (miss_select_word_id_r),
-        .alloc_tag           (miss_select_tag_r),
-        .alloc_way           (miss_select_way_r),
+        .alloc_line_addr      (miss_select_line_addr),
+        .alloc_set_id         (miss_select_set_id),
+        .alloc_word_id        (miss_select_word_id),
+        .alloc_tag            (miss_select_tag),
+        .alloc_way            (miss_select_way),
 
-        .alloc_write         (miss_select_write_r),
-        .alloc_wdata         (miss_select_wdata_r),
-        .alloc_cpu_req_id    (miss_select_cpu_req_id_r),
+        .alloc_write          (miss_select_write),
+        .alloc_wdata          (miss_select_wdata),
+        .alloc_cpu_req_id     (miss_select_cpu_req_id),
 
-        .alloc_victim_valid  (miss_select_victim_valid_r),
-        .alloc_victim_dirty  (miss_select_victim_dirty_r),
-        .alloc_victim_tag    (miss_select_victim_tag_r),
-        .alloc_victim_line   (miss_select_victim_line_r),
+        .alloc_victim_valid   (miss_select_victim_valid),
+        .alloc_victim_dirty   (miss_select_victim_dirty),
+        .alloc_victim_tag     (miss_select_victim_tag),
+        .alloc_victim_line    (miss_select_victim_line),
 
-        .alloc_mshr_id       (mshr_alloc_id),
+        .alloc_mshr_id        (mshr_alloc_id),
 
-        .issue_done          (mshr_issued),
+        .issue_done           (mshr_issued),
 
-        .mem_resp_valid      (mem_resp_valid),
-        .mem_resp_id         (mem_resp_id),
-        .mem_resp_rdata      (mem_resp_rdata),
+        .mem_resp_valid       (mem_resp_valid),
+        .mem_resp_id          (mem_resp_id),
+        .mem_resp_rdata       (mem_resp_rdata),
 
-        .miss_valid          (miss_cpu_resp_valid),
-        .miss_id             (miss_cpu_resp_id),
+        .miss_valid           (miss_cpu_resp_valid),
+        .miss_id              (miss_cpu_resp_id),
 
-        .refill_wen          (refill_wen),
-        .refill_set_id       (refill_set_id),
-        .refill_tag          (refill_tag),
-        .refill_way          (refill_way),
-        .refill_dirty        (refill_dirty),
-        .refill_line         (refill_line),
+        .refill_wen           (refill_wen),
+        .refill_set_id        (refill_set_id),
+        .refill_tag           (refill_tag),
+        .refill_way           (refill_way),
+        .refill_dirty         (refill_dirty),
+        .refill_eviction      (refill_eviction),
+        .refill_line          (refill_line),
 
-        .issue_pending       (),
-        .issue_line_addr     (),
-        .issue_word_id       (),
+        .issue_pending        (),
+        .issue_line_addr      (),
+        .issue_word_id        (),
 
-        .req_valid           (mshr_req_valid),
-        .req_write           (mshr_req_write),
-        .req_addr            (mshr_req_addr),
-        .req_wdata           (mshr_req_wdata),
-        .req_id              (mshr_req_id),
+        .req_valid            (mshr_req_valid),
+        .req_write            (mshr_req_write),
+        .req_addr             (mshr_req_addr),
+        .req_wdata            (mshr_req_wdata),
+        .req_id               (mshr_req_id),
 
-        .full                (mshr_full),
-        .empty               (mshr_empty)
+        .full                 (mshr_full),
+        .empty                (mshr_empty)
     );
 
     Delay_r #(
         .D_WIDTH(DATA_WIDTH),
-        .DELAY  (2)
+        .DELAY  (3)
     ) MISS_RESP_DATA_DELAY (
-        .clk (clk),
-        .rst (rst),
-        .din (mem_resp_rdata),
-        .dout(miss_cpu_resp_data)
+        .clk  (clk),
+        .rst  (rst),
+        .din  (mem_resp_rdata),
+        .dout (miss_cpu_resp_data)
     );
 
     MSHR_Request_Arbiter #(
-        .MSHR_COUNT   (MSHR_COUNT),
-        .ADDR_WIDTH   (ADDR_WIDTH),
-        .DATA_WIDTH   (DATA_WIDTH),
-        .MSHR_ID_WIDTH(MSHR_ID_WIDTH)
+        .MSHR_COUNT    (MSHR_COUNT),
+        .ADDR_WIDTH    (ADDR_WIDTH),
+        .DATA_WIDTH    (DATA_WIDTH),
+        .MSHR_ID_WIDTH (MSHR_ID_WIDTH)
     ) MSHR_REQ_ARBITER (
-        .clk          (clk),
-        .rst          (rst),
+        .clk           (clk),
+        .rst           (rst),
 
-        .req_valid    (mshr_req_valid),
-        .req_write    (mshr_req_write),
-        .req_addr     (mshr_req_addr),
-        .req_wdata    (mshr_req_wdata),
-        .req_id       (mshr_req_id),
+        .req_valid     (mshr_req_valid),
+        .req_write     (mshr_req_write),
+        .req_addr      (mshr_req_addr),
+        .req_wdata     (mshr_req_wdata),
+        .req_id        (mshr_req_id),
 
-        .issued       (mshr_issued),
+        .issued        (mshr_issued),
 
-        .mem_req_valid(mem_req_valid),
-        .mem_req_ready(mem_req_ready),
-        .mem_req_write(mem_req_write),
-        .mem_req_addr (mem_req_addr),
-        .mem_req_wdata(mem_req_wdata),
-        .mem_req_id   (mem_req_id)
+        .mem_req_valid (mem_req_valid),
+        .mem_req_ready (mem_req_ready),
+        .mem_req_write (mem_req_write),
+        .mem_req_addr  (mem_req_addr),
+        .mem_req_wdata (mem_req_wdata),
+        .mem_req_id    (mem_req_id)
     );
 
     assign mem_resp_ready = 1'b1;
 
-    assign hit_resp_valid  = select_valid_r && select_hit_r;
+    assign hit_resp_valid  = cmp_valid && cmp_hit;
     assign miss_resp_valid = miss_cpu_resp_valid;
 
     Response_Unit #(
-        .DATA_WIDTH  (DATA_WIDTH),
-        .CPU_ID_WIDTH(CPU_ID_WIDTH),
-        .FIFO_DEPTH  (128)
-    ) RESPONSE_UNIT (
-        .clk           (clk),
-        .rst           (rst),
-
-        .hit_valid     (hit_resp_valid),
-        .hit_ready     (hit_resp_ready),
-        .hit_data      (select_rdata_r),
-        .hit_id        (select_cpu_req_id_r),
-
-        .miss_valid    (miss_resp_valid),
-        .miss_ready    (miss_resp_ready),
-        .miss_data     (miss_cpu_resp_data),
-        .miss_id       (miss_cpu_resp_id),
-
-        .cpu_resp_valid(cpu_resp_valid),
-        .cpu_resp_ready(cpu_resp_ready),
-        .cpu_resp_hit  (cpu_resp_hit),
-        .cpu_resp_rdata(cpu_resp_rdata),
-        .cpu_resp_id   (cpu_resp_id)
-    );
-
-    Refill_Write_Control #(
-        .ASSOC      (ASSOC),
-        .LINE_WIDTH (LINE_WIDTH),
-        .TAG_WIDTH  (TAG_WIDTH),
-        .FLAG_BITS  (FLAG_BITS),
-        .WAY_INDEX_W(WAY_INDEX_W)
-    ) REFILL_WRITE_CONTROL (
-        .refill_valid(refill_wen),
-        .refill_write(refill_dirty),
-        .refill_way  (refill_way),
-        .refill_line (refill_line),
-        .refill_tag  (refill_tag),
-
-        .data_wen    (refill_data_wen),
-        .tag_wen     (refill_tag_wen),
-        .flag_wen    (refill_flag_wen),
-        .data_wline  (refill_data_wline),
-        .tag_wdata   (refill_tag_wdata),
-        .flag_wdata  (refill_flag_wdata)
-    );
-
-    CPU_Write_Hit_Control #(
-        .ASSOC        (ASSOC),
         .DATA_WIDTH   (DATA_WIDTH),
-        .LINE_WIDTH   (LINE_WIDTH),
-        .TAG_WIDTH    (TAG_WIDTH),
-        .FLAG_BITS    (FLAG_BITS),
-        .WAY_INDEX_W  (WAY_INDEX_W),
-        .WORD_OFFSET_W(WORD_OFFSET_W)
-    ) CPU_WRITE_HIT_CONTROL (
-        .valid     (select_valid_r),
-        .hit       (select_hit_r),
-        .write     (select_write_r),
-        .hit_way   (select_hit_way_r),
-        .word_id   (select_word_id_r),
-        .wdata     (select_wdata_r),
-        .tag       (select_tag_r),
-        .old_line  (data_rline_r),
+        .CPU_ID_WIDTH (CPU_ID_WIDTH),
+        .FIFO_DEPTH   (128)
+    ) RESPONSE_UNIT (
+        .clk            (clk),
+        .rst            (rst),
 
-        .data_wen  (cpu_data_wen),
-        .tag_wen   (cpu_tag_wen),
-        .flag_wen  (cpu_flag_wen),
-        .data_wline(cpu_data_wline),
-        .tag_wdata (cpu_tag_wdata),
-        .flag_wdata(cpu_flag_wdata)
+        .hit_valid      (hit_resp_valid),
+        .hit_ready      (hit_resp_ready),
+        .hit_data       (cmp_rdata),
+        .hit_id         (cmp_cpu_req_id),
+
+        .miss_valid     (miss_resp_valid),
+        .miss_ready     (miss_resp_ready),
+        .miss_data      (miss_cpu_resp_data),
+        .miss_id        (miss_cpu_resp_id),
+
+        .cpu_resp_valid (cpu_resp_valid),
+        .cpu_resp_ready (cpu_resp_ready),
+        .cpu_resp_hit   (cpu_resp_hit),
+        .cpu_resp_rdata (cpu_resp_rdata),
+        .cpu_resp_id    (cpu_resp_id)
     );
+
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            dbg_mshr_alloc_count        <= 0;
+            dbg_expected_eviction_count <= 0;
+            dbg_dirty_eviction_count    <= 0;
+            dbg_clean_eviction_count    <= 0;
+        end
+        else begin
+            if (DEBUG && hit_resp_valid && hit_resp_ready) begin
+                $display("[%0t] CACHE HIT PUSH: write=%0b id=%0d data=%h",
+                         $time,
+                         cmp_write,
+                         cmp_cpu_req_id,
+                         cmp_rdata);
+            end
+
+            if (DEBUG && cpu_write_valid) begin
+                $display("[%0t] CACHE CPU WRITE ARRAY: set=%0d way=%0d word=%0d data=%h replace=%0b cpu_tag_wen=%b",
+                         $time,
+                         cpu_write_set_id,
+                         cpu_write_way,
+                         cpu_write_word_id,
+                         cpu_write_wdata,
+                         cpu_write_replace[cpu_write_way],
+                         cpu_tag_wen);
+            end
+
+            if (DEBUG && refill_wen) begin
+                $display("[%0t] CACHE REFILL ARRAY: set=%0d way=%0d tag=%h dirty=%0b eviction=%0b",
+                         $time,
+                         refill_set_id,
+                         refill_way,
+                         refill_tag,
+                         refill_dirty,
+                         refill_eviction);
+            end
+
+            if (DEBUG && miss_select_valid) begin
+                $display("[%0t] CACHE MISS TO MSHR: ready=%0b write=%0b set=%0d way=%0d tag=%h addr=%h victim_valid=%0b victim_dirty=%0b victim_tag=%h",
+                         $time,
+                         mshr_alloc_ready,
+                         miss_select_write,
+                         miss_select_set_id,
+                         miss_select_way,
+                         miss_select_tag,
+                         miss_select_addr,
+                         miss_select_victim_valid,
+                         miss_select_victim_dirty,
+                         miss_select_victim_tag);
+            end
+
+            if (DEBUG && dbg_mshr_alloc_fire) begin
+                dbg_mshr_alloc_count <= dbg_mshr_alloc_count + 1;
+
+                if (miss_select_victim_valid) begin
+                    dbg_expected_eviction_count <= dbg_expected_eviction_count + 1;
+
+                    if (miss_select_victim_dirty) begin
+                        dbg_dirty_eviction_count <= dbg_dirty_eviction_count + 1;
+                    end
+                    else begin
+                        dbg_clean_eviction_count <= dbg_clean_eviction_count + 1;
+                    end
+                end
+
+                $display("[%0t] MSHR ALLOC DEBUG: alloc#=%0d mshr_id=%0d write=%0b cpu_id=%0d addr=%h line_addr=%h set=%0d word=%0d way=%0d new_tag=%h victim_valid=%0b victim_dirty=%0b victim_tag=%h victim_line=%h",
+                         $time,
+                         dbg_mshr_alloc_count + 1,
+                         mshr_alloc_id,
+                         miss_select_write,
+                         miss_select_cpu_req_id,
+                         miss_select_addr,
+                         miss_select_line_addr,
+                         miss_select_set_id,
+                         miss_select_word_id,
+                         miss_select_way,
+                         miss_select_tag,
+                         miss_select_victim_valid,
+                         miss_select_victim_dirty,
+                         miss_select_victim_tag,
+                         miss_select_victim_line);
+            end
+
+            if (DEBUG && cpu_req_valid && !cpu_req_ready) begin
+                $display("[%0t] CPU REQ BLOCKED: write=%0b addr=%h id=%0d hit_ready=%0b mshr_ready=%0b mshr_full=%0b",
+                         $time,
+                         cpu_req_write,
+                         cpu_req_addr,
+                         cpu_req_id,
+                         hit_resp_ready,
+                         mshr_alloc_ready,
+                         mshr_full);
+            end
+        end
+    end
 
 endmodule

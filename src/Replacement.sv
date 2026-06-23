@@ -3,13 +3,13 @@
 // ASSOC = 1 returns way 0
 // ASSOC > 1 uses ASSOC-1 PLRU bits per set
 //
-// Includes invalid-way priority:
-//   1. If any way is invalid, choose the first invalid way.
-//   2. Otherwise choose the PLRU victim.
+// Fully sequential lookup:
+//   replacement_way is registered.
+//   Output corresponds to previous cycle's lookup_set.
 //
-// Update occurs after:
-//   - cache hit access
-//   - refill/install access
+// This module is PLRU only.
+// It does NOT check valid bits.
+// Invalid-way priority is handled outside this module.
 // ============================================================
 
 module Replacement #(
@@ -22,12 +22,11 @@ module Replacement #(
     input  logic clk,
     input  logic rst,
 
-    // Victim lookup
+    // PLRU victim lookup
     input  logic [SET_INDEX_W-1:0] lookup_set,
-    input  logic [ASSOC-1:0]       valid_bits,
-    output logic [WAY_INDEX_W-1:0] victim_way,
+    output logic [WAY_INDEX_W-1:0] replacement_way,
 
-    // Replacement state update
+    // PLRU state update
     input  logic                   update_valid,
     input  logic [SET_INDEX_W-1:0] update_set,
     input  logic [WAY_INDEX_W-1:0] update_way
@@ -36,71 +35,51 @@ module Replacement #(
     generate
         if (ASSOC == 1) begin : GEN_DIRECT_MAPPED
 
-            assign victim_way = '0;
+            always_ff @(posedge clk) begin
+                if (rst) begin
+                    replacement_way <= '0;
+                end else begin
+                    replacement_way <= '0;
+                end
+            end
 
         end else begin : GEN_TREE_PLRU
 
             localparam int PLRU_BITS = ASSOC - 1;
             localparam int LEVELS    = $clog2(ASSOC);
 
-            logic [PLRU_BITS-1:0] plru_bits [NUM_SETS-1:0];
-            logic [PLRU_BITS-1:0] curr_bits;
-            logic [PLRU_BITS-1:0] next_bits;
-
-            logic [WAY_INDEX_W-1:0] plru_victim_way;
-            logic [WAY_INDEX_W-1:0] invalid_way;
-            logic                   has_invalid;
+            logic [PLRU_BITS-1:0]    plru_bits [NUM_SETS-1:0];
+            logic [PLRU_BITS-1:0]    curr_bits;
+            logic [PLRU_BITS-1:0]    next_bits;
+            logic [WAY_INDEX_W-1:0]  replacement_way_n;
 
             assign curr_bits = plru_bits[update_set];
 
             // ====================================================
-            // First invalid way priority
-            // ====================================================
-
-            always_comb begin
-                has_invalid = 1'b0;
-                invalid_way = '0;
-
-                for (int i = 0; i < ASSOC; i++) begin
-                    if (!valid_bits[i] && !has_invalid) begin
-                        has_invalid = 1'b1;
-                        invalid_way = i[WAY_INDEX_W-1:0];
-                    end
-                end
-            end
-
-            // ====================================================
-            // PLRU victim select
+            // PLRU victim select for current lookup_set
+            // Registered into replacement_way on clk edge.
             // ====================================================
 
             always_comb begin
                 int node;
 
-                plru_victim_way = '0;
-                node            = 0;
+                replacement_way_n = '0;
+                node              = 0;
 
                 for (int level = 0; level < LEVELS; level++) begin
                     if (plru_bits[lookup_set][node] == 1'b0) begin
-                        plru_victim_way[LEVELS-1-level] = 1'b0;
+                        replacement_way_n[LEVELS-1-level] = 1'b0;
                         node = (2 * node) + 1;
-                    end
-                    else begin
-                        plru_victim_way[LEVELS-1-level] = 1'b1;
+                    end else begin
+                        replacement_way_n[LEVELS-1-level] = 1'b1;
                         node = (2 * node) + 2;
                     end
                 end
             end
 
             // ====================================================
-            // Final victim select
-            // ====================================================
-
-            assign victim_way = has_invalid ? invalid_way : plru_victim_way;
-
-            // ====================================================
             // PLRU update
-            // On access, update bits along path to point away
-            // from the accessed way.
+            // Points away from accessed / installed way.
             // ====================================================
 
             always_comb begin
@@ -113,26 +92,26 @@ module Replacement #(
                     if (update_way[LEVELS-1-level] == 1'b0) begin
                         next_bits[node] = 1'b1;
                         node = (2 * node) + 1;
-                    end
-                    else begin
+                    end else begin
                         next_bits[node] = 1'b0;
                         node = (2 * node) + 2;
                     end
                 end
             end
 
-            // ====================================================
-            // Replacement state array
-            // ====================================================
-
             always_ff @(posedge clk) begin
                 if (rst) begin
                     for (int i = 0; i < NUM_SETS; i++) begin
                         plru_bits[i] <= '0;
                     end
-                end
-                else if (update_valid) begin
-                    plru_bits[update_set] <= next_bits;
+
+                    replacement_way <= '0;
+                end else begin
+                    if (update_valid) begin
+                        plru_bits[update_set] <= next_bits;
+                    end
+
+                    replacement_way <= replacement_way_n;
                 end
             end
 

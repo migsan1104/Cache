@@ -1,6 +1,7 @@
 // ============================================================
 // Single MSHR entry - two-process FSM
 // Write miss fetches only other 3 words.
+// refill_wen, refill_eviction, and refill_dirty are one-cycle pulses.
 // ============================================================
 
 module MSHR_Entry #(
@@ -13,7 +14,8 @@ module MSHR_Entry #(
     parameter int DATA_WIDTH      = 32,
     parameter int LINE_WIDTH      = 128,
     parameter int CPU_ID_WIDTH    = 4,
-    parameter int MSHR_ID_WIDTH   = 2
+    parameter int MSHR_ID_WIDTH   = 2,
+    localparam logic DEBUG        = 1'b0
 )(
     input  logic clk,
     input  logic rst,
@@ -57,8 +59,6 @@ module MSHR_Entry #(
     output logic [TAG_WIDTH-1:0]       tag,
     output logic [WAY_INDEX_W-1:0]     way,
 
-    output logic                       dirty,
-
     output logic [CPU_ID_WIDTH-1:0]    cpu_req_id,
     output logic [MSHR_ID_WIDTH-1:0]   mshr_id,
 
@@ -66,6 +66,8 @@ module MSHR_Entry #(
     output logic [CPU_ID_WIDTH-1:0]    miss_id,
 
     output logic                       refill_wen,
+    output logic                       refill_dirty,
+    output logic                       refill_eviction,
     output logic [LINE_WIDTH-1:0]      fill_line
 );
 
@@ -117,11 +119,16 @@ module MSHR_Entry #(
 
     logic miss_valid_r, miss_valid_n;
     logic refill_wen_r, refill_wen_n;
+    logic refill_dirty_r, refill_dirty_n;
+    logic refill_eviction_r, refill_eviction_n;
 
     assign wb_word_id = wb_count[WORD_OFFSET_W-1:0];
 
-    assign read_issue_word_id = issue_count[WORD_OFFSET_W-1:0];
-    assign read_recv_word_id  = recv_count [WORD_OFFSET_W-1:0];
+    assign read_issue_word_id =
+    WORD_OFFSET_W'((miss_word_id_r + issue_count[WORD_OFFSET_W-1:0]) % WORDS_PER_LINE);
+
+assign read_recv_word_id =
+    WORD_OFFSET_W'((miss_word_id_r + recv_count[WORD_OFFSET_W-1:0]) % WORDS_PER_LINE);
 
     assign write_issue_word_id =
         (issue_count[WORD_OFFSET_W-1:0] >= miss_word_id_r)
@@ -170,12 +177,13 @@ module MSHR_Entry #(
         ? victim_line_r[wb_word_id * DATA_WIDTH +: DATA_WIDTH]
         : '0;
 
-    assign word_id    = active_issue_word_id;
-    assign dirty      = write_r;
-    assign fill_line  = fill_line_r;
-    assign miss_valid = miss_valid_r;
-    assign miss_id    = cpu_req_id;
-    assign refill_wen = refill_wen_r;
+    assign word_id          = active_issue_word_id;
+    assign fill_line        = fill_line_r;
+    assign miss_valid       = miss_valid_r;
+    assign miss_id          = cpu_req_id;
+    assign refill_wen       = refill_wen_r;
+    assign refill_dirty     = refill_dirty_r;
+    assign refill_eviction  = refill_eviction_r;
 
     always_comb begin
         state_n        = state;
@@ -203,8 +211,10 @@ module MSHR_Entry #(
 
         fill_line_n    = fill_line_r;
 
-        miss_valid_n   = 1'b0;
-        refill_wen_n   = 1'b0;
+        miss_valid_n      = 1'b0;
+        refill_wen_n      = 1'b0;
+        refill_dirty_n    = 1'b0;
+        refill_eviction_n = 1'b0;
 
         case (state)
 
@@ -234,6 +244,24 @@ module MSHR_Entry #(
 
                     if (alloc_write) begin
                         fill_line_n[alloc_word_id * DATA_WIDTH +: DATA_WIDTH] = alloc_wdata;
+                    end
+
+                    if (DEBUG) begin
+                        $display("[%0t] MSHR_ALLOC_DEBUG: mshr_id=%0d cpu_id=%0d alloc_write=%0b alloc_line_addr=%h alloc_set=%0d alloc_word=%0d alloc_tag=%h alloc_way=%0d victim_valid=%0b victim_dirty=%0b victim_tag=%h victim_line=%h initial_fill_line=%h",
+                                 $time,
+                                 alloc_mshr_id,
+                                 alloc_cpu_req_id,
+                                 alloc_write,
+                                 alloc_line_addr,
+                                 alloc_set_id,
+                                 alloc_word_id,
+                                 alloc_tag,
+                                 alloc_way,
+                                 alloc_victim_valid,
+                                 alloc_victim_dirty,
+                                 alloc_victim_tag,
+                                 alloc_victim_line,
+                                 fill_line_n);
                     end
 
                     if (alloc_victim_valid && alloc_victim_dirty)
@@ -289,9 +317,11 @@ module MSHR_Entry #(
                         miss_valid_n = 1'b1;
 
                     if (recv_count == WORDS_PER_LINE-1) begin
-                        recv_count_n = '0;
-                        refill_wen_n = 1'b1;
-                        state_n      = S_REFILL;
+                        recv_count_n      = '0;
+                        refill_wen_n      = 1'b1;
+                        refill_dirty_n    = 1'b0;
+                        refill_eviction_n = victim_valid_r;
+                        state_n           = S_REFILL;
                     end
                     else begin
                         recv_count_n = recv_count + 1'b1;
@@ -307,9 +337,11 @@ module MSHR_Entry #(
                         miss_valid_n = 1'b1;
 
                     if (recv_count == WORDS_PER_LINE-2) begin
-                        recv_count_n = '0;
-                        refill_wen_n = 1'b1;
-                        state_n      = S_REFILL;
+                        recv_count_n      = '0;
+                        refill_wen_n      = 1'b1;
+                        refill_dirty_n    = 1'b1;
+                        refill_eviction_n =  1'b0;
+                        state_n           = S_REFILL;
                     end
                     else begin
                         recv_count_n = recv_count + 1'b1;
@@ -355,8 +387,10 @@ module MSHR_Entry #(
 
             fill_line_r    <= '0;
 
-            miss_valid_r   <= 1'b0;
-            refill_wen_r   <= 1'b0;
+            miss_valid_r      <= 1'b0;
+            refill_wen_r      <= 1'b0;
+            refill_dirty_r    <= 1'b0;
+            refill_eviction_r <= 1'b0;
         end
         else begin
             state          <= state_n;
@@ -384,8 +418,61 @@ module MSHR_Entry #(
 
             fill_line_r    <= fill_line_n;
 
-            miss_valid_r   <= miss_valid_n;
-            refill_wen_r   <= refill_wen_n;
+            miss_valid_r      <= miss_valid_n;
+            refill_wen_r      <= refill_wen_n;
+            refill_dirty_r    <= refill_dirty_n;
+            refill_eviction_r <= refill_eviction_n;
+        end
+
+        if (!rst && DEBUG && req_valid && issue_done) begin
+            $display("[%0t] MSHR_REQ_ISSUE: state=%s mshr_id=%0d cpu_id=%0d write=%0b req_addr=%h req_word=%0d req_wdata=%h line_addr=%h set=%0d tag=%h way=%0d wb_count=%0d issue_count=%0d active_issue_word=%0d victim_tag=%h victim_line=%h",
+                     $time,
+                     state.name(),
+                     mshr_id,
+                     cpu_req_id,
+                     req_write,
+                     req_addr,
+                     req_addr[WORD_OFFSET_W-1:0],
+                     req_wdata,
+                     line_addr,
+                     set_id,
+                     tag,
+                     way,
+                     wb_count,
+                     issue_count,
+                     active_issue_word_id,
+                     victim_tag_r,
+                     victim_line_r);
+        end
+
+        if (!rst && DEBUG && resp_valid) begin
+            $display("[%0t] MSHR_RESP_ACCEPT: state=%s mshr_id=%0d cpu_id=%0d resp_data=%h recv_count=%0d active_recv_word=%0d fill_line_before=%h fill_line_after=%h",
+                     $time,
+                     state.name(),
+                     mshr_id,
+                     cpu_req_id,
+                     resp_data,
+                     recv_count,
+                     active_recv_word_id,
+                     fill_line_r,
+                     fill_line_n);
+        end
+
+        if (!rst && refill_wen_n && DEBUG) begin
+            $display("[%0t] MSHR_REFILL_FIRE: mshr_id=%0d cpu_id=%0d write=%0b set=%0d way=%0d tag=%h line_addr=%h victim_valid=%0b victim_dirty=%0b refill_dirty=%0b refill_eviction=%0b fill_line=%h",
+                     $time,
+                     mshr_id_n,
+                     cpu_req_id_n,
+                     write_n,
+                     set_id_n,
+                     way_n,
+                     tag_n,
+                     line_addr_n,
+                     victim_valid_n,
+                     victim_dirty_n,
+                     refill_dirty_n,
+                     refill_eviction_n,
+                     fill_line_n);
         end
     end
 

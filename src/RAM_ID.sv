@@ -2,6 +2,11 @@
 // Downstream RAM with request/response ID tracking
 // 32-bit word memory, word-addressed interface
 // Response ID matches MSHR ID, not CPU request ID
+//
+// Reset behavior:
+//   - Reloads INIT_FILE on reset so every test starts from a
+//     clean downstream memory image.
+//   - Clears pending read-response pipeline state.
 // ============================================================
 
 module RAM_ID #(
@@ -50,6 +55,9 @@ module RAM_ID #(
 
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
+            // Reload RAM contents on every reset so each test is isolated.
+            $readmemh(INIT_FILE, mem);
+
             valid_pipe <= '0;
 
             for (int i = 0; i <= READ_LATENCY; i++) begin

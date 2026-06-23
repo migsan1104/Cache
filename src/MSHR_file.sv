@@ -14,7 +14,9 @@ module MSHR_File #(
     parameter int LINE_WIDTH      = 128,
     parameter int CPU_ID_WIDTH    = 4,
     parameter int MSHR_ID_WIDTH   = 2,
-    parameter int MISSQ_DEPTH     = 16
+    parameter int MISSQ_DEPTH     = 64,
+    parameter int MSHR_AF         = 7,
+    localparam logic DEBUG      = 1'b0
 )(
     input  logic clk,
     input  logic rst,
@@ -53,6 +55,7 @@ module MSHR_File #(
     output logic [TAG_WIDTH-1:0]       refill_tag,
     output logic [WAY_INDEX_W-1:0]     refill_way,
     output logic                       refill_dirty,
+    output logic                       refill_eviction,
     output logic [LINE_WIDTH-1:0]      refill_line,
 
     output logic [3:0]                 issue_pending,
@@ -107,6 +110,8 @@ module MSHR_File #(
     logic [MSHR_COUNT-1:0] entry_valid;
     logic [MSHR_COUNT-1:0] entry_issue_pending;
     logic [MSHR_COUNT-1:0] entry_refill_wen;
+    logic [MSHR_COUNT-1:0] entry_refill_dirty;
+    logic [MSHR_COUNT-1:0] entry_refill_eviction;
     logic [MSHR_COUNT-1:0] entry_miss_valid;
 
     logic [LINE_ADDR_WIDTH-1:0] entry_line_addr [MSHR_COUNT];
@@ -115,7 +120,6 @@ module MSHR_File #(
     logic [TAG_WIDTH-1:0]       entry_tag       [MSHR_COUNT];
     logic [WAY_INDEX_W-1:0]     entry_way       [MSHR_COUNT];
 
-    logic [MSHR_COUNT-1:0]      entry_dirty;
     logic [CPU_ID_WIDTH-1:0]    entry_cpu_req_id [MSHR_COUNT];
     logic [CPU_ID_WIDTH-1:0]    entry_miss_id    [MSHR_COUNT];
     logic [MSHR_ID_WIDTH-1:0]   entry_mshr_id    [MSHR_COUNT];
@@ -150,12 +154,12 @@ module MSHR_File #(
     assign missq_rentry = missq_rdata;
 
     assign alloc_ready = !missq_almost_full;
-    assign missq_wr_en = alloc_valid && alloc_ready;
+    assign missq_wr_en = alloc_valid;
 
     FIFO_Almost #(
         .WIDTH          (MISSQ_WIDTH),
         .DEPTH          (MISSQ_DEPTH),
-        .ALMOST_FULL_GAP(5)
+        .ALMOST_FULL_GAP(MSHR_AF)
     ) MISS_QUEUE (
         .clk        (clk),
         .rst        (rst),
@@ -259,13 +263,15 @@ module MSHR_File #(
         .entry_set_id    (entry_set_id),
         .entry_tag       (entry_tag),
         .entry_way       (entry_way),
-        .entry_dirty     (entry_dirty),
+        .entry_refill_dirty(entry_refill_dirty),
+        .entry_refill_eviction(entry_refill_eviction),
         .entry_fill_line (entry_fill_line),
         .refill_wen      (refill_wen),
         .refill_set_id   (refill_set_id),
         .refill_tag      (refill_tag),
         .refill_way      (refill_way),
         .refill_dirty    (refill_dirty),
+        .refill_eviction (refill_eviction),
         .refill_line     (refill_line)
     );
 
@@ -340,8 +346,6 @@ module MSHR_File #(
                 .tag                (entry_tag[i]),
                 .way                (entry_way[i]),
 
-                .dirty              (entry_dirty[i]),
-
                 .cpu_req_id         (entry_cpu_req_id[i]),
                 .mshr_id            (entry_mshr_id[i]),
 
@@ -349,10 +353,31 @@ module MSHR_File #(
                 .miss_id            (entry_miss_id[i]),
 
                 .refill_wen         (entry_refill_wen[i]),
+                .refill_dirty       (entry_refill_dirty[i]),
+                .refill_eviction    (entry_refill_eviction[i]),
                 .fill_line          (entry_fill_line[i])
             );
 
         end
     endgenerate
-
+      always_ff @(posedge clk) begin
+        if (!rst) begin
+            if (entry_alloc_fire && DEBUG) begin
+                $display("[%0t] MSHR_FILE_ALLOC_LATCH: entry=%0d cpu_id=%0d write=%0b line_addr=%h set=%0d word=%0d tag=%h way=%0d victim_valid=%0b victim_dirty=%0b victim_tag=%h victim_line=%h",
+                         $time,
+                         entry_alloc_idx,
+                         dispatch_entry_r.cpu_req_id,
+                         dispatch_entry_r.write,
+                         dispatch_entry_r.line_addr,
+                         dispatch_entry_r.set_id,
+                         dispatch_entry_r.word_id,
+                         dispatch_entry_r.tag,
+                         dispatch_entry_r.way,
+                         dispatch_entry_r.victim_valid,
+                         dispatch_entry_r.victim_dirty,
+                         dispatch_entry_r.victim_tag,
+                         dispatch_entry_r.victim_line);
+            end
+        end
+    end
 endmodule

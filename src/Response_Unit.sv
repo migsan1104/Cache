@@ -12,7 +12,8 @@
 module Response_Unit #(
     parameter int DATA_WIDTH   = 32,
     parameter int CPU_ID_WIDTH = 4,
-    parameter int FIFO_DEPTH   = 64
+    parameter int FIFO_DEPTH   = 64,
+    localparam logic DEBUG         = 1'b0
 )(
     input  logic clk,
     input  logic rst,
@@ -123,12 +124,12 @@ module Response_Unit #(
         cpu_resp_ready &&
         choose_hit;
     always_ff @(posedge clk) begin
-    if (!rst && hit_valid && hit_ready) begin
+    if (!rst && hit_valid && hit_ready && DEBUG) begin
         $display("[%0t] RESPONSE_UNIT PUSH HIT: id=%0d data=%h",
                  $time, hit_id, hit_data);
     end
 
-    if (!rst && miss_valid && miss_ready) begin
+    if (!rst && miss_valid && miss_ready && DEBUG) begin
         $display("[%0t] RESPONSE_UNIT PUSH MISS: id=%0d data=%h",
                  $time, miss_id, miss_data);
     end
