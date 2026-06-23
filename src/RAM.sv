@@ -1,45 +1,34 @@
-// ============================================================
-// Simple parameterized RAM with variable read latency
-// READ_LATENCY = 0 creates combinational read data
-// ============================================================
-
 module RAM #(
-    parameter int D_WIDTH      = 32,
-    parameter int DEPTH        = 256,
-    parameter int READ_LATENCY = 1
+    parameter int D_WIDTH = 32,
+    parameter int DEPTH   = 256
 )(
-    input  logic                         clk,
+    input  logic                     clk,
+    input  logic                     rst,
 
-    input  logic                         wen,
-    input  logic [$clog2(DEPTH)-1:0]     waddr,
-    input  logic [D_WIDTH-1:0]           wdata,
+    input  logic                     wen,
+    input  logic [$clog2(DEPTH)-1:0] waddr,
+    input  logic [D_WIDTH-1:0]       wdata,
 
-    input  logic [$clog2(DEPTH)-1:0]     raddr,
-    output logic [D_WIDTH-1:0]           rdata
+    input  logic [$clog2(DEPTH)-1:0] raddr,
+    output logic [D_WIDTH-1:0]       rdata
 );
 
-    // Internal memory storage
     logic [D_WIDTH-1:0] mem [DEPTH-1:0];
 
-    // Raw combinational read data before optional output delay
-    logic [D_WIDTH-1:0] rdata_raw;
-
-    // Synchronous write port
     always_ff @(posedge clk) begin
-        if (wen)
-            mem[waddr] <= wdata;
+        if (rst) begin
+            for (int i = 0; i < DEPTH; i++) begin
+                mem[i] <= '0;
+            end
+            rdata <= '0;
+        end
+        else begin
+            rdata <= mem[raddr];
+
+            if (wen) begin
+                mem[waddr] <= wdata;
+            end
+        end
     end
-
-    // Combinational read port
-    assign rdata_raw = mem[raddr];
-
-    Delay #(
-        .D_WIDTH(D_WIDTH),
-        .DELAY  (READ_LATENCY)
-    ) READ_DELAY (
-        .clk (clk),
-        .din (rdata_raw),
-        .dout(rdata)
-    );
 
 endmodule

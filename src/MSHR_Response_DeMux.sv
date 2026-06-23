@@ -1,7 +1,10 @@
 // ============================================================
 // MSHR response valid demux
-// Broadcasts response data to all MSHRs
-// Routes only the valid pulse by response ID
+// Broadcasts registered response data to all MSHRs
+// Routes registered valid pulse by response ID
+//
+// IMPORTANT:
+//   mshr_resp_valid and mshr_resp_data are phase-aligned.
 // ============================================================
 
 module MSHR_Response_DeMux #(
@@ -20,17 +23,17 @@ module MSHR_Response_DeMux #(
     output logic [DATA_WIDTH-1:0]    mshr_resp_data
 );
 
-    assign mshr_resp_data = mem_resp_rdata;
-
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
             mshr_resp_valid <= '0;
+            mshr_resp_data  <= '0;
         end
         else begin
             mshr_resp_valid <= '0;
 
             if (mem_resp_valid) begin
                 mshr_resp_valid[mem_resp_id] <= 1'b1;
+                mshr_resp_data               <= mem_resp_rdata;
             end
         end
     end

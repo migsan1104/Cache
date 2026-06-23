@@ -1,7 +1,7 @@
 m255
 K4
 z2
-Z0 !s12c _opt
+Z0 !s12c _opt2
 Z1 !s99 nomlopt
 R0
 R1
@@ -55,27 +55,273 @@ R0
 R1
 R0
 R1
-Z2 !s12c _opt2
-R1
-R2
-R1
-R2
+R0
 R1
 R0
 R1
-R2
-R1
-R2
-R1
-R2
-R1
-!s12c _opt1
+R0
 R1
 R0
 R1
 R0
 R1
 R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+Z2 !s12c _opt1
+R1
+R2
+R1
+R2
+R1
+R2
+R1
+R2
+R1
+R2
+R1
+R2
+R1
+R2
+R1
+R2
+R1
+R2
+R1
+R2
+R1
+R2
+R1
+R2
+R1
+Z3 !s12c _opt
+R1
+R3
+R1
+R3
+R1
+R2
+R1
+R2
+R1
+R2
+R1
+R3
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R3
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R3
+R1
+R0
+R1
+R0
+R1
+R0
+R1
+R2
+R1
+R3
+R1
+R3
+R1
+R3
 R1
 !s11f vlog 2023.3 2023.07, Jul 17 2023
 13
@@ -84,153 +330,258 @@ R1
 !i10e 25
 !i10f 100
 cModel Technology
-Z3 d/ecel/UFAD/miguel.sanchez1/BNN_actual/prog_actual
+Z4 d/ecel/UFAD/miguel.sanchez1/BNN_actual/prog_actual
 T_opt
-!s110 1781203832
-V0oB]^OD9hES<OBgI:_<nb1
-Z4 04 10 4 work Basic_Test fast 0
-=14-34800d31d870-6a2b0377-c6d0d-2fbe62
+!s110 1781653688
+VXbf6Lb=CJQF0<oM:;ZE]40
+04 10 4 work Basic_Test fast 0
+=3-34800d31d870-6a31e0b7-6306a-5e091
 R1
 Z5 !s12b OEM100
 Z6 !s124 OEM100
-o-quiet -auto_acc_if_foreign -work work
-Z7 tCvgOpt 0
+Z7 o-quiet -auto_acc_if_foreign -work work
+Z8 tCvgOpt 0
 n@_opt
-Z8 OL;O;2023.3;77
-T_opt1
-!s110 1780437574
-VYifUVDO3_GgeDf]Rc>o^=1
-04 5 4 work Cache fast 0
-=1-34800d31d870-6a1f5245-86ae9-1cf087
-R1
-R5
-R6
-Z9 o-quiet -auto_acc_if_foreign -work work +acc
-R7
-n@_opt1
-R8
-R3
-T_opt2
-!s110 1781050021
-Vz=LR4RRcXH;6iRCz1TlCO2
+Z9 OL;O;2023.3;77
 R4
-=7-34800d31d870-6a28aaa5-220af-2a601b
+T_opt1
+!s110 1781737805
+V6i4UCF6zf_kUbaoD3ZAJD1
+04 6 4 work Test_1 fast 0
+=17-34800d31d870-6a33294c-a49d7-603b4
 R1
 R5
 R6
-R9
 R7
-n@_opt2
 R8
-R3
+n@_opt1
+R9
+R4
+T_opt2
+!s110 1782177150
+VGzhU:>FFXQnaZd7gkk:U]2
+04 13 4 work Test_Complete fast 0
+=1-34800d31d870-6a39dd7d-549c4-2343d8
+R1
+R5
+R6
+R7
+R8
+n@_opt2
+R9
+R4
 vAddress_Decode
 2/ecel/UFAD/miguel.sanchez1/Cache/src/Address_Decode.sv
 Z10 DXx6 sv_std 3 std 0 22 9oUSJO;AeEaW`l:M@^WG92
-!s110 1781115258
+!s110 1782167700
 !i10b 1
-!s100 :cD;lHM8`LniBmD^_FD=k0
-I>edLZF[0N?Yl0ibEB55So2
+!s100 EzNkYoI;<2Wm`[=`lEeJU3
+IZii<N`IZG>l=;GkX1_G9e0
 S1
 Z11 d/ecel/UFAD/miguel.sanchez1/Cache/Verification
-w1780431199
+w1782167698
 8/ecel/UFAD/miguel.sanchez1/Cache/src/Address_Decode.sv
 F/ecel/UFAD/miguel.sanchez1/Cache/src/Address_Decode.sv
-!i122 47
-L0 8 49
+!i122 296
+L0 17 95
 Z12 VDg1SIo80bB@j0V0VzS_@n1
 Z13 OL;L;2023.3;77
 r1
 !s85 0
 31
-!s108 1781115258.000000
+!s108 1782167700.000000
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Address_Decode.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Address_Decode.sv|
 !i113 0
 Z14 o-work work -sv -L mtiAvm -L mtiRnm -L mtiOvm -L mtiUvm -L mtiUPF -L infact
-R7
+R8
 n@address_@decode
 vBasic_Test
 2/ecel/UFAD/miguel.sanchez1/Cache/Verification/Basic_Test.sv
 R10
-!s110 1781203826
+!s110 1781652813
 !i10b 1
-!s100 [7`cTA_^QA=WGI4XKW4i?1
-IGdnE@[lgi4ninzAV7EBYa1
+!s100 CMcDZNBlW`RSSNUad0UJe0
+I9Zo4;XiOgccK2@b4R[NcU0
 S1
 R11
-w1781203813
+w1781652796
 8/ecel/UFAD/miguel.sanchez1/Cache/Verification/Basic_Test.sv
 F/ecel/UFAD/miguel.sanchez1/Cache/Verification/Basic_Test.sv
-!i122 113
-L0 3 390
+!i122 178
+L0 3 475
 R12
 R13
 r1
 !s85 0
 31
-!s108 1781203826.000000
+!s108 1781652813.000000
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/Verification/Basic_Test.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/Verification/Basic_Test.sv|
 !i113 0
 R14
-R7
+R8
 n@basic_@test
 vCache
 2/ecel/UFAD/miguel.sanchez1/Cache/src/Cache.sv
 R10
-!s110 1781203415
+!s110 1782170155
 !i10b 1
-!s100 8OAN8gVL3lB`c5c4zhU@=0
-IBHAo_<LcL=;hYeh7WDf=f0
+!s100 ^UkO5<>jmco[Q6J9_NiWJ0
+Ie:kZVnhRS`5Kb?^NF0aaD1
 S1
 R11
-w1781203408
+w1782170126
 8/ecel/UFAD/miguel.sanchez1/Cache/src/Cache.sv
 F/ecel/UFAD/miguel.sanchez1/Cache/src/Cache.sv
-!i122 112
-L0 13 649
+!i122 302
+L0 23 604
 R12
 R13
 r1
 !s85 0
 31
-!s108 1781203415.000000
+!s108 1782170155.000000
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Cache.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Cache.sv|
 !i113 0
 R14
-R7
+R8
 n@cache
-vCPU_Write_Hit_Control
-2/ecel/UFAD/miguel.sanchez1/Cache/src/CPU_Write_Hit_Control.sv
+vCompare_Select
+2/ecel/UFAD/miguel.sanchez1/Cache/src/Compare_Select.sv
 R10
-Z15 !s110 1781115259
+!s110 1781752969
 !i10b 1
-!s100 a:7_[ojLKK:l1OR_oz?Tl1
-IRFmjliZgXlBY2oZPUD_fD3
+!s100 boFIZ7<ai1gASdOO7O0[Q3
+IAIkYBnJFE9hQ8;DSQ?;cD2
 S1
 R11
-w1779932179
-8/ecel/UFAD/miguel.sanchez1/Cache/src/CPU_Write_Hit_Control.sv
-F/ecel/UFAD/miguel.sanchez1/Cache/src/CPU_Write_Hit_Control.sv
-!i122 49
-L0 1 47
+w1781752961
+8/ecel/UFAD/miguel.sanchez1/Cache/src/Compare_Select.sv
+F/ecel/UFAD/miguel.sanchez1/Cache/src/Compare_Select.sv
+!i122 223
+L0 20 224
 R12
 R13
 r1
 !s85 0
 31
-Z16 !s108 1781115259.000000
+!s108 1781752968.000000
+!s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Compare_Select.sv|
+!s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Compare_Select.sv|
+!i113 0
+R14
+R8
+n@compare_@select
+vCompare_Select_Replace
+2/ecel/UFAD/miguel.sanchez1/Cache/src/Compare_Select_Replace.sv
+R10
+!s110 1782008763
+!i10b 1
+!s100 oORccgNE^>gZiOa?fJc<g1
+IZ2^2hC48]lzNiCN`:92z]3
+S1
+R11
+w1782008012
+8/ecel/UFAD/miguel.sanchez1/Cache/src/Compare_Select_Replace.sv
+F/ecel/UFAD/miguel.sanchez1/Cache/src/Compare_Select_Replace.sv
+!i122 269
+L0 27 239
+R12
+R13
+r1
+!s85 0
+31
+!s108 1782008763.000000
+!s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Compare_Select_Replace.sv|
+!s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Compare_Select_Replace.sv|
+!i113 0
+R14
+R8
+n@compare_@select_@replace
+vCPU_Write
+2/ecel/UFAD/miguel.sanchez1/Cache/src/CPU_Write.sv
+R10
+!s110 1781498333
+!i10b 1
+!s100 zAzfMQ`^GDz[TOA@;Gn`C2
+ISGWY5e7FT4=>N^43jE<ZR2
+S1
+R11
+w1781498312
+8/ecel/UFAD/miguel.sanchez1/Cache/src/CPU_Write.sv
+F/ecel/UFAD/miguel.sanchez1/Cache/src/CPU_Write.sv
+!i122 174
+L0 11 64
+R12
+R13
+r1
+!s85 0
+31
+!s108 1781498333.000000
+!s107 /ecel/UFAD/miguel.sanchez1/Cache/src/CPU_Write.sv|
+!s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/CPU_Write.sv|
+!i113 0
+R14
+R8
+n@c@p@u_@write
+vCPU_Write_Hit_Control
+2/ecel/UFAD/miguel.sanchez1/Cache/src/CPU_Write_Hit_Control.sv
+R10
+Z15 !s110 1781306815
+!i10b 1
+!s100 goX;OHLCDlS8>ZWBz7Aic3
+IhXQeJ5Fno7@l_9m:_n;dm2
+S1
+R11
+w1781306388
+8/ecel/UFAD/miguel.sanchez1/Cache/src/CPU_Write_Hit_Control.sv
+F/ecel/UFAD/miguel.sanchez1/Cache/src/CPU_Write_Hit_Control.sv
+!i122 164
+L0 1 40
+R12
+R13
+r1
+!s85 0
+31
+Z16 !s108 1781306815.000000
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/CPU_Write_Hit_Control.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/CPU_Write_Hit_Control.sv|
 !i113 0
 R14
-R7
+R8
 n@c@p@u_@write_@hit_@control
+vData_Array
+2/ecel/UFAD/miguel.sanchez1/Cache/src/Data_Array.sv
+R10
+!s110 1781737794
+!i10b 1
+!s100 Sdzhhcil]G;8=om9dL[B51
+IglzC]Ncl<57G9fNRnCn2W0
+S1
+R11
+w1781736408
+8/ecel/UFAD/miguel.sanchez1/Cache/src/Data_Array.sv
+F/ecel/UFAD/miguel.sanchez1/Cache/src/Data_Array.sv
+!i122 209
+L0 19 61
+R12
+R13
+r1
+!s85 0
+31
+!s108 1781737794.000000
+!s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Data_Array.sv|
+!s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Data_Array.sv|
+!i113 0
+R14
+R8
+n@data_@array
 vDelay
 2/ecel/UFAD/miguel.sanchez1/Cache/src/Delay.sv
 R10
-R15
+Z17 !s110 1781115259
 !i10b 1
 !s100 bbZ@7bcD6A;c:P<mWDzHM0
 I<Sa?]gEK@jbBiGOf47ER>1
@@ -240,23 +591,23 @@ w1780258343
 8/ecel/UFAD/miguel.sanchez1/Cache/src/Delay.sv
 F/ecel/UFAD/miguel.sanchez1/Cache/src/Delay.sv
 !i122 50
-Z17 L0 6 52
+Z18 L0 6 52
 R12
 R13
 r1
 !s85 0
 31
-R16
+Z19 !s108 1781115259.000000
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Delay.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Delay.sv|
 !i113 0
 R14
-R7
+R8
 n@delay
 vDelay_FF
 2/ecel/UFAD/miguel.sanchez1/Cache/src/Delay_FF.sv
 R10
-R15
+R17
 !i10b 1
 !s100 S>`RADWT?gT5:EkC_Y5GG1
 IbMeCBJA2JZeP[L;:POo6H2
@@ -266,23 +617,23 @@ w1778530624
 8/ecel/UFAD/miguel.sanchez1/Cache/src/Delay_FF.sv
 F/ecel/UFAD/miguel.sanchez1/Cache/src/Delay_FF.sv
 !i122 51
-R17
+R18
 R12
 R13
 r1
 !s85 0
 31
-R16
+R19
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Delay_FF.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Delay_FF.sv|
 !i113 0
 R14
-R7
+R8
 n@delay_@f@f
 vDelay_FF_r
 2/ecel/UFAD/miguel.sanchez1/Cache/src/Delay_FF_r.sv
 R10
-Z18 !s110 1781115260
+Z20 !s110 1781115260
 !i10b 1
 !s100 RhemQiM;Hm;Z<Ig7^Dda:0
 IQjB6R_j`RolRe=gdj1l5@0
@@ -292,23 +643,23 @@ w1778530635
 8/ecel/UFAD/miguel.sanchez1/Cache/src/Delay_FF_r.sv
 F/ecel/UFAD/miguel.sanchez1/Cache/src/Delay_FF_r.sv
 !i122 52
-Z19 L0 6 55
+Z21 L0 6 55
 R12
 R13
 r1
 !s85 0
 31
-Z20 !s108 1781115260.000000
+Z22 !s108 1781115260.000000
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Delay_FF_r.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Delay_FF_r.sv|
 !i113 0
 R14
-R7
+R8
 n@delay_@f@f_r
 vDelay_r
 2/ecel/UFAD/miguel.sanchez1/Cache/src/Delay_r.sv
 R10
-R18
+R20
 !i10b 1
 !s100 b_c`5[7V0Mak7CCb[ka=l2
 IzRNZz:CU_8c]OE:C=K^?21
@@ -318,23 +669,23 @@ w1778530943
 8/ecel/UFAD/miguel.sanchez1/Cache/src/Delay_r.sv
 F/ecel/UFAD/miguel.sanchez1/Cache/src/Delay_r.sv
 !i122 53
-R19
+R21
 R12
 R13
 r1
 !s85 0
 31
-R20
+R22
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Delay_r.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Delay_r.sv|
 !i113 0
 R14
-R7
+R8
 n@delay_r
 vFF
 2/ecel/UFAD/miguel.sanchez1/Cache/src/FF.sv
 R10
-R18
+R20
 !i10b 1
 !s100 CN0d0AP?R0=cnfOenCHV?2
 IFO_IKU^51Le2hXIYbz=8Y1
@@ -350,17 +701,17 @@ R13
 r1
 !s85 0
 31
-R20
+R22
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/FF.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/FF.sv|
 !i113 0
 R14
-R7
+R8
 n@f@f
 vFF_r
 2/ecel/UFAD/miguel.sanchez1/Cache/src/FF_r.sv
 R10
-R18
+!s110 1781301330
 !i10b 1
 !s100 <4bUTVg@UX5Uc?0^e:]@^1
 I9D>cggd^k`NL^CFMg24bK1
@@ -369,24 +720,24 @@ R11
 w1778530424
 8/ecel/UFAD/miguel.sanchez1/Cache/src/FF_r.sv
 F/ecel/UFAD/miguel.sanchez1/Cache/src/FF_r.sv
-!i122 55
+!i122 159
 L0 7 17
 R12
 R13
 r1
 !s85 0
 31
-R20
+!s108 1781301329.000000
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/FF_r.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/FF_r.sv|
 !i113 0
 R14
-R7
+R8
 n@f@f_r
 vFIFO
 2/ecel/UFAD/miguel.sanchez1/Cache/src/FIFO.sv
 R10
-Z21 !s110 1781115261
+Z23 !s110 1781115261
 !i10b 1
 !s100 WK`75>7X^42dK?J5X59z02
 IP4_@<g4P_Em4Mf8K<Tegk0
@@ -396,18 +747,18 @@ w1780269514
 8/ecel/UFAD/miguel.sanchez1/Cache/src/FIFO.sv
 F/ecel/UFAD/miguel.sanchez1/Cache/src/FIFO.sv
 !i122 56
-Z22 L0 1 58
+L0 1 58
 R12
 R13
 r1
 !s85 0
 31
-R20
+R22
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/FIFO.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/FIFO.sv|
 !i113 0
 R14
-R7
+R8
 n@f@i@f@o
 vFIFO_Almost
 2/ecel/UFAD/miguel.sanchez1/Cache/src/FIFO_Almost.sv
@@ -428,12 +779,12 @@ R13
 r1
 !s85 0
 31
-Z23 !s108 1781203187.000000
+!s108 1781203187.000000
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/FIFO_Almost.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/FIFO_Almost.sv|
 !i113 0
 R14
-R7
+R8
 n@f@i@f@o_@almost
 vFIFO_FWFT
 2/ecel/UFAD/miguel.sanchez1/Cache/src/FIFO_FWFT.sv
@@ -459,20 +810,98 @@ r1
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/FIFO_FWFT.sv|
 !i113 0
 R14
-R7
+R8
 n@f@i@f@o_@f@w@f@t
-vHit_compare
-2/ecel/UFAD/miguel.sanchez1/Cache/src/Hit_compare.sv
+vFlag_Array
+2/ecel/UFAD/miguel.sanchez1/Cache/src/Flag_Array.sv
 R10
-R21
+!s110 1781736085
+!i10b 1
+!s100 2`F1Bk]zn?E7iJnI7V7oE0
+IIR3_Y:6]CRPT;6YNJDbHB3
+S1
+R11
+w1781735904
+8/ecel/UFAD/miguel.sanchez1/Cache/src/Flag_Array.sv
+F/ecel/UFAD/miguel.sanchez1/Cache/src/Flag_Array.sv
+!i122 207
+L0 19 114
+R12
+R13
+r1
+!s85 0
+31
+!s108 1781736085.000000
+!s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Flag_Array.sv|
+!s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Flag_Array.sv|
+!i113 0
+R14
+R8
+n@flag_@array
+vFlag_Data_Array
+2/ecel/UFAD/miguel.sanchez1/Cache/src/Flag_Data_Array.sv
+R10
+!s110 1782008671
+!i10b 1
+!s100 :giab353f=;cSRG@0b3Ma0
+Ica?zRmnTYfe3DiN8@;PG^3
+S1
+R11
+w1782008136
+8/ecel/UFAD/miguel.sanchez1/Cache/src/Flag_Data_Array.sv
+F/ecel/UFAD/miguel.sanchez1/Cache/src/Flag_Data_Array.sv
+!i122 268
+L0 26 142
+R12
+R13
+r1
+!s85 0
+31
+!s108 1782008671.000000
+!s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Flag_Data_Array.sv|
+!s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Flag_Data_Array.sv|
+!i113 0
+R14
+R8
+n@flag_@data_@array
+vHit_Compare
+Z24 2/ecel/UFAD/miguel.sanchez1/Cache/src/Hit_compare.sv
+R10
+!s110 1781659333
+!i10b 1
+!s100 Jj9`_@OX[`nKGK39Ym<c33
+IJiQ9]ASX^@=XaM9lC1Wg32
+S1
+R11
+w1781658246
+Z25 8/ecel/UFAD/miguel.sanchez1/Cache/src/Hit_compare.sv
+Z26 F/ecel/UFAD/miguel.sanchez1/Cache/src/Hit_compare.sv
+!i122 184
+L0 19 143
+R12
+R13
+r1
+!s85 0
+31
+Z27 !s108 1781659333.000000
+Z28 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Hit_compare.sv|
+Z29 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Hit_compare.sv|
+!i113 0
+R14
+R8
+n@hit_@compare
+vHit_compare
+R24
+R10
+R23
 !i10b 1
 !s100 Ba4ZdlTd]k72heYJ2`mO53
 I5gToCZQca:HJ;3z_Ej:A@2
 S1
 R11
 w1778785881
-8/ecel/UFAD/miguel.sanchez1/Cache/src/Hit_compare.sv
-F/ecel/UFAD/miguel.sanchez1/Cache/src/Hit_compare.sv
+R25
+R26
 !i122 58
 L0 6 23
 R12
@@ -480,17 +909,17 @@ R13
 r1
 !s85 0
 31
-Z24 !s108 1781115261.000000
-!s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Hit_compare.sv|
-!s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Hit_compare.sv|
+Z30 !s108 1781115261.000000
+R28
+R29
 !i113 0
 R14
-R7
+R8
 n@hit_compare
 vMemory_Request_Arbiter
 2/ecel/UFAD/miguel.sanchez1/Cache/src/Memory_Request_Arbirter.sv
 R10
-R21
+R23
 !i10b 1
 !s100 Hg`z0UCPN=WK<6h70I`3b2
 IWUo1biF_QTcHhlFQFJJ:h3
@@ -506,17 +935,17 @@ R13
 r1
 !s85 0
 31
-R24
+R30
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Memory_Request_Arbirter.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Memory_Request_Arbirter.sv|
 !i113 0
 R14
-R7
+R8
 n@memory_@request_@arbiter
 vMemory_Request_Unit
 2/ecel/UFAD/miguel.sanchez1/Cache/src/Memory_Request_Unit.sv
 R10
-Z25 !s110 1781115262
+Z31 !s110 1781115262
 !i10b 1
 !s100 HzJ3F?IfW:2JaD63Q9UIo3
 I0E20CS51O[]_ZYDlcfLz82
@@ -532,17 +961,17 @@ R13
 r1
 !s85 0
 31
-R24
+R30
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Memory_Request_Unit.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Memory_Request_Unit.sv|
 !i113 0
 R14
-R7
+R8
 n@memory_@request_@unit
 vMiss_Issue_Controller
 2/ecel/UFAD/miguel.sanchez1/Cache/src/Miss_Issue_Controller.sv
 R10
-R25
+R31
 !i10b 1
 !s100 HgA9NN6FTY`f5`E6lJd<C3
 I2OD^kgnPN5EMzXIJn=LRL3
@@ -552,96 +981,96 @@ w1779668334
 8/ecel/UFAD/miguel.sanchez1/Cache/src/Miss_Issue_Controller.sv
 F/ecel/UFAD/miguel.sanchez1/Cache/src/Miss_Issue_Controller.sv
 !i122 61
-Z26 L0 7 75
+L0 7 75
 R12
 R13
 r1
 !s85 0
 31
-Z27 !s108 1781115262.000000
+!s108 1781115262.000000
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Miss_Issue_Controller.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Miss_Issue_Controller.sv|
 !i113 0
 R14
-R7
+R8
 n@miss_@issue_@controller
 vMSHR_Entry
 2/ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Entry.sv
 R10
-R25
+Z32 !s110 1782178990
 !i10b 1
-!s100 ZQLN5im70Q81jI@GIL7242
-IEPMmUc[HMo^zdMAlgO=zO1
+!s100 hg[o7nH6d`iCNF0Wc^=lo2
+IPk83JAX4V;JBRlI;MR02d2
 S1
 R11
-w1781112503
+w1782178611
 8/ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Entry.sv
 F/ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Entry.sv
-!i122 63
-L0 6 387
+!i122 312
+L0 11 446
 R12
 R13
 r1
 !s85 0
 31
-R27
+!s108 1782178989.000000
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Entry.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Entry.sv|
 !i113 0
 R14
-R7
+R8
 n@m@s@h@r_@entry
 vMSHR_File
 2/ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_File.sv
 R10
-!s110 1781203188
+R32
 !i10b 1
-!s100 Od3hkk]khSS]k8oZPd;VP3
-I8^a[RX4eEEBPbz`H`A;Yd0
+!s100 GdG[GI3E6gzEC=hmNl8Rn3
+IH22z>7lSgRV1]BfJLhS:20
 S1
 R11
-w1781203076
+w1782178843
 8/ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_File.sv
 F/ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_File.sv
-!i122 111
-L0 6 353
+!i122 313
+L0 9 454
 R12
 R13
 r1
 !s85 0
 31
-R23
+!s108 1782178990.000000
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_File.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_File.sv|
 !i113 0
 R14
-R7
+R8
 n@m@s@h@r_@file
 vMSHR_Mux
 2/ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Mux.sv
 R10
-Z28 !s110 1781115263
+!s110 1781826645
 !i10b 1
-!s100 ndKeMHna^8>cg[]JhhNh;3
-IMjDKI]Y;3j`P3l^V94>i73
+!s100 f`6ZgfjE2N02akH]5iDJE1
+Iaf>Oc<=_Va2EVl08kkJSK3
 S1
 R11
-w1780257801
+w1781826553
 8/ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Mux.sv
 F/ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Mux.sv
-!i122 65
-R22
+!i122 243
+L0 1 85
 R12
 R13
 r1
 !s85 0
 31
-Z29 !s108 1781115263.000000
+!s108 1781826644.000000
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Mux.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Mux.sv|
 !i113 0
 R14
-R7
+R8
 n@m@s@h@r_@mux
 vMSHR_Request_Arbiter
 2/ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Request_Arbiter.sv
@@ -667,38 +1096,38 @@ r1
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Request_Arbiter.sv|
 !i113 0
 R14
-R7
+R8
 n@m@s@h@r_@request_@arbiter
 vMSHR_Response_DeMux
 2/ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Response_DeMux.sv
 R10
-R28
+!s110 1782164024
 !i10b 1
-!s100 NE_jCfo2UNLGAgG?1EX`I2
-ISoT;@5PF<3M`XFU`;4j<N2
+!s100 Y9zfXhL5>j0i`RnWAKAVV0
+Iz11f?aQ<e<Ng@E@L^i4X]2
 S1
 R11
-w1780256999
+w1782164018
 8/ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Response_DeMux.sv
 F/ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Response_DeMux.sv
-!i122 67
-L0 7 32
+!i122 286
+L0 10 32
 R12
 R13
 r1
 !s85 0
 31
-R29
+!s108 1782164024.000000
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Response_DeMux.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Response_DeMux.sv|
 !i113 0
 R14
-R7
+R8
 n@m@s@h@r_@response_@de@mux
 vMSHR_Response_Mux
 2/ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Response_Mux.sv
 R10
-Z30 !s110 1781115264
+Z33 !s110 1781115264
 !i10b 1
 !s100 9chk3WeAbiM]jin^kX8:12
 I6^K8kaX1USYZIZ<a`CA8@2
@@ -714,17 +1143,17 @@ R13
 r1
 !s85 0
 31
-R29
+!s108 1781115263.000000
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Response_Mux.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Response_Mux.sv|
 !i113 0
 R14
-R7
+R8
 n@m@s@h@r_@response_@mux
 vMSHR_Response_Unit
 2/ecel/UFAD/miguel.sanchez1/Cache/src/Miss_Response_Unit.sv
 R10
-R25
+!s110 1781211468
 !i10b 1
 !s100 SRQWzkmM1S11g^hzcfjNa0
 I5g]T`6S9>>z2[l@kR=OYa2
@@ -733,24 +1162,24 @@ R11
 w1780182899
 8/ecel/UFAD/miguel.sanchez1/Cache/src/Miss_Response_Unit.sv
 F/ecel/UFAD/miguel.sanchez1/Cache/src/Miss_Response_Unit.sv
-!i122 62
+!i122 129
 L0 9 102
 R12
 R13
 r1
 !s85 0
 31
-R27
+!s108 1781211468.000000
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Miss_Response_Unit.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Miss_Response_Unit.sv|
 !i113 0
 R14
-R7
+R8
 n@m@s@h@r_@response_@unit
 vMSHR_Scheduler
 2/ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Scheduler.sv
 R10
-R30
+R33
 !i10b 1
 !s100 Vz48=hKWd6GjAZEf4oj9?0
 IbPMf9TYQTABX;N>GIn0620
@@ -766,147 +1195,147 @@ R13
 r1
 !s85 0
 31
-Z31 !s108 1781115264.000000
+!s108 1781115264.000000
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Scheduler.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/MSHR_Scheduler.sv|
 !i113 0
 R14
-R7
+R8
 n@m@s@h@r_@scheduler
 vRAM
 2/ecel/UFAD/miguel.sanchez1/Cache/src/RAM.sv
 R10
-R30
+R15
 !i10b 1
-!s100 YVcGHhPRUfh[_oZ=G8D`P0
-InKOjBX0=mUW4S=D6cS;>I0
+!s100 a8k1fKof70nbUFI7N4_>L2
+I_P1<KTaLe6nP2TjPPR6_G1
 S1
 R11
-w1778539063
+w1781306375
 8/ecel/UFAD/miguel.sanchez1/Cache/src/RAM.sv
 F/ecel/UFAD/miguel.sanchez1/Cache/src/RAM.sv
-!i122 70
-L0 6 40
+!i122 165
+L0 1 34
 R12
 R13
 r1
 !s85 0
 31
-R31
+R16
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/RAM.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/RAM.sv|
 !i113 0
 R14
-R7
+R8
 n@r@a@m
 vRAM_2W1R
 2/ecel/UFAD/miguel.sanchez1/Cache/src/RAM_2W1R.sv
 R10
-R30
+Z34 !s110 1781302412
 !i10b 1
-!s100 QCPZh:AihU8c74`_J<nK_0
-IQjLX;D[7jVD`HZn:]dj@c3
+!s100 k?2dRD`lob[W1k_icmBLT3
+InaJh1fVWJ3Vm=ZO91Ckd31
 S1
 R11
-w1780439874
+w1781302406
 8/ecel/UFAD/miguel.sanchez1/Cache/src/RAM_2W1R.sv
 F/ecel/UFAD/miguel.sanchez1/Cache/src/RAM_2W1R.sv
-!i122 71
-L0 9 73
+!i122 161
+L0 9 42
 R12
 R13
 r1
 !s85 0
 31
-R31
+Z35 !s108 1781302412.000000
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/RAM_2W1R.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/RAM_2W1R.sv|
 !i113 0
 R14
-R7
+R8
 n@r@a@m_2@w1@r
 vRAM_2W1R_Reset
 2/ecel/UFAD/miguel.sanchez1/Cache/src/RAM_2W1R_Reset.sv
 R10
-!s110 1781115267
+!s110 1781300671
 !i10b 1
-!s100 L]GgTmGHD`WYLzccV_On92
-IYKmZ4zdAz9eb4AgR>l1hi2
+!s100 C8W8hz9gmFCLA6SW^6JgD3
+IAkag^CEFIDRizEQoi2kbR0
 S1
 R11
-w1780439947
+w1781300557
 8/ecel/UFAD/miguel.sanchez1/Cache/src/RAM_2W1R_Reset.sv
 F/ecel/UFAD/miguel.sanchez1/Cache/src/RAM_2W1R_Reset.sv
-!i122 79
-L0 9 68
+!i122 157
+L0 10 49
 R12
 R13
 r1
 !s85 0
 31
-Z32 !s108 1781115266.000000
+!s108 1781300671.000000
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/RAM_2W1R_Reset.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/RAM_2W1R_Reset.sv|
 !i113 0
 R14
-R7
+R8
 n@r@a@m_2@w1@r_@reset
 vRAM_ID
 2/ecel/UFAD/miguel.sanchez1/Cache/src/RAM_ID.sv
 R10
-!s110 1781119499
+!s110 1782155223
 !i10b 1
-!s100 cijc`gMFEX:QgY=i=S83H3
-I704Y[Ma=83MogOKf5G1iM3
+!s100 04I]zzm9h0e7C@W[Fi8@d2
+IJSz[oQz4<ZiYU[]Ke]9ia3
 S1
 R11
-w1781119485
+w1782155210
 8/ecel/UFAD/miguel.sanchez1/Cache/src/RAM_ID.sv
 F/ecel/UFAD/miguel.sanchez1/Cache/src/RAM_ID.sv
-!i122 82
-R26
+!i122 279
+L0 12 78
 R12
 R13
 r1
 !s85 0
 31
-!s108 1781119498.000000
+!s108 1782155223.000000
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/RAM_ID.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/RAM_ID.sv|
 !i113 0
 R14
-R7
+R8
 n@r@a@m_@i@d
 vRefill_Write_Control
 2/ecel/UFAD/miguel.sanchez1/Cache/src/Refill_Write_Control.sv
 R10
-Z33 !s110 1781115265
+R34
 !i10b 1
-!s100 `PU=g?zmcFf08X2Rg44PL2
-Ii02M3IC_OU8[hXKhzQW223
+!s100 U`iXV[`74mzeQT;VFHT9b3
+I;j?gzXaB1?Re[=@3Tml<g1
 S1
 R11
-w1779932798
+w1781301757
 8/ecel/UFAD/miguel.sanchez1/Cache/src/Refill_Write_Control.sv
 F/ecel/UFAD/miguel.sanchez1/Cache/src/Refill_Write_Control.sv
-!i122 73
-L0 1 41
+!i122 162
+L0 1 42
 R12
 R13
 r1
 !s85 0
 31
-Z34 !s108 1781115265.000000
+R35
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Refill_Write_Control.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Refill_Write_Control.sv|
 !i113 0
 R14
-R7
+R8
 n@refill_@write_@control
 vReg
 2/ecel/UFAD/miguel.sanchez1/Cache/src/Reg.sv
 R10
-R33
+Z36 !s110 1781115265
 !i10b 1
 !s100 Yzd>7g02FXWPMWa@53eB72
 Ig?E0:1_9m1zFP;9fnnhKn2
@@ -922,17 +1351,17 @@ R13
 r1
 !s85 0
 31
-R34
+Z37 !s108 1781115265.000000
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Reg.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Reg.sv|
 !i113 0
 R14
-R7
+R8
 n@reg
 vReg_r
 2/ecel/UFAD/miguel.sanchez1/Cache/src/Reg_r.sv
 R10
-R33
+R36
 !i10b 1
 !s100 M:hgfJ`>gQTZQ3DNfK;H[2
 I^VSzRE0Dg`3d1O9NWYL8?2
@@ -948,88 +1377,218 @@ R13
 r1
 !s85 0
 31
-R34
+R37
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Reg_r.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Reg_r.sv|
 !i113 0
 R14
-R7
+R8
 n@reg_r
 vReplacement
 2/ecel/UFAD/miguel.sanchez1/Cache/src/Replacement.sv
 R10
-Z35 !s110 1781115266
+!s110 1781832270
 !i10b 1
-!s100 ^V4N<6=WFFB`cn;F2nBhG2
-IfBED0FQ]?n[oX]aoSX@Tf0
+!s100 ONMhHUg9Q[J@R<kdUb@=h2
+ISWHF9KKLi7ocQFS:XzP:Q3
 S1
 R11
-w1780268071
+w1781832263
 8/ecel/UFAD/miguel.sanchez1/Cache/src/Replacement.sv
 F/ecel/UFAD/miguel.sanchez1/Cache/src/Replacement.sv
-!i122 76
-L0 15 128
+!i122 253
+L0 15 107
 R12
 R13
 r1
 !s85 0
 31
-R34
+!s108 1781832270.000000
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Replacement.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Replacement.sv|
 !i113 0
 R14
-R7
+R8
 n@replacement
-vResponse_Unit
-2/ecel/UFAD/miguel.sanchez1/Cache/src/Response_Unit.sv
+vReservation_Station
+2/ecel/UFAD/miguel.sanchez1/Cache/src/Reservation_Station.sv
 R10
-!s110 1781200618
+!s110 1782177111
 !i10b 1
-!s100 G4c4dlOAOM86GUOaUnH953
-Ii3fn:D?2@h@Sc:9Jc0UZa3
+!s100 eoLh84YjzjmYcL@<^57M20
+IeikPbcVh`7368TcU608`J2
 S1
 R11
-w1781200608
-8/ecel/UFAD/miguel.sanchez1/Cache/src/Response_Unit.sv
-F/ecel/UFAD/miguel.sanchez1/Cache/src/Response_Unit.sv
-!i122 104
-L0 12 125
+w1782176325
+8/ecel/UFAD/miguel.sanchez1/Cache/src/Reservation_Station.sv
+F/ecel/UFAD/miguel.sanchez1/Cache/src/Reservation_Station.sv
+!i122 311
+L0 14 229
 R12
 R13
 r1
 !s85 0
 31
-!s108 1781200618.000000
+!s108 1782177111.000000
+!s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Reservation_Station.sv|
+!s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Reservation_Station.sv|
+!i113 0
+R14
+R8
+n@reservation_@station
+vResponse_Unit
+2/ecel/UFAD/miguel.sanchez1/Cache/src/Response_Unit.sv
+R10
+!s110 1781293513
+!i10b 1
+!s100 Fz175LWG@2o8I`Q8MZ]k33
+I:fP2YYjS2VMFmIRQlVijQ1
+S1
+R11
+w1781293476
+8/ecel/UFAD/miguel.sanchez1/Cache/src/Response_Unit.sv
+F/ecel/UFAD/miguel.sanchez1/Cache/src/Response_Unit.sv
+!i122 144
+L0 12 126
+R12
+R13
+r1
+!s85 0
+31
+!s108 1781293512.000000
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Response_Unit.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Response_Unit.sv|
 !i113 0
 R14
-R7
+R8
 n@response_@unit
-vVictim_Select
-2/ecel/UFAD/miguel.sanchez1/Cache/src/Victim_Select.sv
+vTag_Array
+2/ecel/UFAD/miguel.sanchez1/Cache/src/Tag_Array.sv
 R10
-R35
+!s110 1782009888
 !i10b 1
-!s100 1oaW__]2e=M;LK`<;:6T73
-IRa[5Yi=L7QHWZB=<>93D32
+!s100 _7nk7<_9VFYI>;ioZCLD31
+IIRBEFYcKCLh7dWDmoRT1h3
 S1
 R11
-w1778789362
-8/ecel/UFAD/miguel.sanchez1/Cache/src/Victim_Select.sv
-F/ecel/UFAD/miguel.sanchez1/Cache/src/Victim_Select.sv
-!i122 78
-L0 6 31
+w1782009858
+8/ecel/UFAD/miguel.sanchez1/Cache/src/Tag_Array.sv
+F/ecel/UFAD/miguel.sanchez1/Cache/src/Tag_Array.sv
+!i122 272
+L0 1 61
 R12
 R13
 r1
 !s85 0
 31
-R32
+!s108 1782009888.000000
+!s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Tag_Array.sv|
+!s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Tag_Array.sv|
+!i113 0
+R14
+R8
+n@tag_@array
+vTest
+Z38 2/ecel/UFAD/miguel.sanchez1/Cache/Verification/Test_Complete.sv
+R10
+!s110 1781740693
+!i10b 1
+!s100 Ze>cTd]8NZCZPfR9m2F8^2
+Ii_27j>OB=140>VlafSCbb3
+S1
+R11
+w1781740393
+Z39 8/ecel/UFAD/miguel.sanchez1/Cache/Verification/Test_Complete.sv
+Z40 F/ecel/UFAD/miguel.sanchez1/Cache/Verification/Test_Complete.sv
+!i122 211
+L0 3 776
+R12
+R13
+r1
+!s85 0
+31
+!s108 1781740692.000000
+Z41 !s107 /ecel/UFAD/miguel.sanchez1/Cache/Verification/Test_Complete.sv|
+Z42 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/Verification/Test_Complete.sv|
+!i113 0
+R14
+R8
+n@test
+vTest_1
+2/ecel/UFAD/miguel.sanchez1/Cache/Verification/Test1.sv
+R10
+!s110 1781731994
+!i10b 1
+!s100 dMcQXkOUJR00X7>Y6=[HN1
+Ieo2;`c?Bko?9N^=dY1=CF3
+S1
+R11
+w1781731983
+8/ecel/UFAD/miguel.sanchez1/Cache/Verification/Test1.sv
+F/ecel/UFAD/miguel.sanchez1/Cache/Verification/Test1.sv
+!i122 197
+L0 3 520
+R12
+R13
+r1
+!s85 0
+31
+!s108 1781731994.000000
+!s107 /ecel/UFAD/miguel.sanchez1/Cache/Verification/Test1.sv|
+!s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/Verification/Test1.sv|
+!i113 0
+R14
+R8
+n@test_1
+vTest_Complete
+R38
+R10
+!s110 1782171976
+!i10b 1
+!s100 a7jDMk=C4F@iH`on12Thn0
+IWW`7oZZ3`kHB[]CB1DRB[1
+S1
+R11
+w1782170894
+R39
+R40
+!i122 309
+L0 3 1045
+R12
+R13
+r1
+!s85 0
+31
+!s108 1782171976.000000
+R41
+R42
+!i113 0
+R14
+R8
+n@test_@complete
+vVictim_Select
+2/ecel/UFAD/miguel.sanchez1/Cache/src/Victim_Select.sv
+R10
+!s110 1781659334
+!i10b 1
+!s100 CzDb8030a8=]1E?oTI9@32
+I5l_9O8HDz63cZFlL5ZhL51
+S1
+R11
+w1781659289
+8/ecel/UFAD/miguel.sanchez1/Cache/src/Victim_Select.sv
+F/ecel/UFAD/miguel.sanchez1/Cache/src/Victim_Select.sv
+!i122 185
+L0 17 40
+R12
+R13
+r1
+!s85 0
+31
+R27
 !s107 /ecel/UFAD/miguel.sanchez1/Cache/src/Victim_Select.sv|
 !s90 -reportprogress|300|-work|work|-vopt|-sv|-stats=none|/ecel/UFAD/miguel.sanchez1/Cache/src/Victim_Select.sv|
 !i113 0
 R14
-R7
+R8
 n@victim_@select
